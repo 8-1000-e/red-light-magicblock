@@ -624,7 +624,6 @@ dependencies = [
  "game-config",
  "player-registry",
  "player-state",
- "position",
  "serde",
 ]
 
@@ -1102,7 +1101,6 @@ dependencies = [
  "game-config",
  "player-registry",
  "player-state",
- "position",
  "serde",
 ]
 
@@ -1265,7 +1263,6 @@ dependencies = [
  "game-config",
  "player-registry",
  "player-state",
- "position",
  "serde",
 ]
 
@@ -1390,13 +1387,6 @@ dependencies = [
 
 [[package]]
 name = "player-state"
-version = "0.2.4"
-dependencies = [
- "bolt-lang",
-]
-
-[[package]]
-name = "position"
 version = "0.2.4"
 dependencies = [
  "bolt-lang",
@@ -3207,7 +3197,6 @@ dependencies = [
  "game-config",
  "player-registry",
  "player-state",
- "position",
  "serde",
 ]
 
