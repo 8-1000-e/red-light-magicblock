@@ -22,7 +22,7 @@ pub mod check_price {
         let last_price = ctx.accounts.game_config.last_price;
 
         // Any drop = red light
-        if last_price > 0 && price < last_price {
+        if last_price > 0 && price < last_price  && ctx.accounts.game_config.light == 0 {
             ctx.accounts.game_config.light = 1;
             ctx.accounts.game_config.red_until = now + RED_DURATION;
         } else {

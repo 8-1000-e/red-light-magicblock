@@ -109,18 +109,23 @@ export default function Game({ price, history }: Props) {
       return;
     }
 
+    // Red light just expired → force green for this cycle, reset check timer
+    if (light === "red" && now >= redUntil && redUntil > 0) {
+      setLight("green");
+      setLastPrice(price); // reset baseline so next check compares from now
+      setLastCheckTime(now);
+      setRedUntil(0);
+      return;
+    }
+
     // Time for a new check?
     if (now - lastCheckTime >= CHECK_INTERVAL_MS) {
       if (lastPrice !== null) {
         if (price < lastPrice) {
-          // Price dropped → RED LIGHT
           setLight("red");
           setRedUntil(now + RED_DURATION_MS);
-          setPriceLog((prev) => [...prev, { time: now, price, result: "down" }]);
         } else {
-          // Price same or up → GREEN LIGHT
           setLight("green");
-          setPriceLog((prev) => [...prev, { time: now, price, result: "up" }]);
         }
       }
       setLastPrice(price);
@@ -188,34 +193,47 @@ export default function Game({ price, history }: Props) {
 
   return (
     <div className="flex flex-col items-center gap-4 w-full h-full flex-1">
-      {/* HUD */}
-      <div className="flex items-center gap-6">
-        <div className="text-2xl font-mono">
-          SOL/USD{" "}
-          <span className="text-cyan-400 font-bold">
-            {price ? `$${price.toFixed(4)}` : "..."}
-          </span>
+      {/* HUD — pixel card top right */}
+      <div className="absolute top-3 right-3 z-50 p-5 flex flex-col gap-1 items-center justify-center" style={{ imageRendering: "pixelated", width: 240, height: 250, backgroundImage: "url('/CARD.png')", backgroundSize: "100% 100%", backgroundRepeat: "no-repeat" }}>
+        <div className="text-gray-500 text-lg">SOL/USD</div>
+
+        <div className="flex items-baseline gap-2">
+          <span className="text-blue-700 text-3xl">-3sec:</span>
+          <span className="text-gray-800 text-3xl">{lastPrice?.toFixed(4) ?? "..."}</span>
         </div>
-        <div className={`px-4 py-1 rounded-full font-bold text-sm ${
-          light === "green" ? "bg-green-500 text-black" : "bg-red-500 text-white animate-pulse"
-        }`}>
-          {light === "green" ? "GREEN LIGHT" : "RED LIGHT"}
+
+        <div className={`text-4xl ${light === "red" ? "text-red-600" : "text-green-600"}`}>
+          {light === "red" ? "▼" : "▲"}
         </div>
+
+        <div className="flex items-baseline gap-2">
+          <span className="text-rose-600 text-3xl">now:</span>
+          <span className="text-gray-800 text-3xl">{price?.toFixed(4) ?? "..."}</span>
+        </div>
+
+        {gameState === "playing" && (
+          <div className="flex items-baseline gap-2 mt-2">
+            <span className="text-gray-500 text-lg">CHECK IN:</span>
+            <span className="text-gray-800 text-2xl">{Math.max(0, CHECK_INTERVAL_MS / 1000 - Math.floor((Date.now() - lastCheckTime) / 1000))}sec</span>
+          </div>
+        )}
+
+        {/* Buttons */}
         {gameState === "lobby" && (
           <button
             onClick={startGame}
             disabled={!price}
-            className="px-6 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:bg-gray-700 rounded-xl font-bold text-white transition"
+            className="mt-2 px-4 py-2 bg-green-700 hover:bg-green-600 disabled:bg-gray-500 border-2 border-green-900 text-white text-sm transition"
           >
-            Start
+            START
           </button>
         )}
         {gameState === "ended" && (
           <button
             onClick={startGame}
-            className="px-6 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-xl font-bold text-white transition"
+            className="mt-2 px-4 py-2 bg-green-700 hover:bg-green-600 border-2 border-green-900 text-white text-sm transition"
           >
-            Retry
+            RETRY
           </button>
         )}
       </div>
