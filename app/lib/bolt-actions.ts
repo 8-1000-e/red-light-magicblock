@@ -9,12 +9,19 @@ import {
   CreateSession,
   Session,
 } from "@magicblock-labs/bolt-sdk";
-import { BN } from "@coral-xyz/anchor";
+import { AnchorProvider, BN, setProvider } from "@coral-xyz/anchor";
+
+// Set a dummy Anchor provider so the SDK doesn't call AnchorProvider.local()
+export function initProvider(connection: Connection, wallet: any) {
+  const provider = new AnchorProvider(connection, wallet, { commitment: "confirmed" });
+  setProvider(provider);
+}
 import {
   ALL_COMPONENTS,
   GAME_CONFIG_COMPONENT,
   PLAYER_STATE_COMPONENT,
   PLAYER_REGISTRY_COMPONENT,
+  LEADERBOARD_COMPONENT,
   INIT_GAME_SYSTEM,
   SPAWN_PLAYER_SYSTEM,
   START_GAME_SYSTEM,
@@ -240,7 +247,7 @@ export async function movePlayer(
     world: worldPda,
     entities: [
       { entity: playerEntityPda, components: [{ componentId: PLAYER_STATE_COMPONENT }] },
-      { entity: gameEntityPda, components: [{ componentId: GAME_CONFIG_COMPONENT }] },
+      { entity: gameEntityPda, components: [{ componentId: GAME_CONFIG_COMPONENT }, { componentId: LEADERBOARD_COMPONENT }] },
     ],
     session,
   });

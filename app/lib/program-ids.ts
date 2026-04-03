@@ -4,6 +4,7 @@ import { PublicKey } from "@solana/web3.js";
 export const GAME_CONFIG_COMPONENT = new PublicKey("HSmw8VMWEBaNTuTbfG5GZAPabRawKr7DWtDAtov6ev3w");
 export const PLAYER_STATE_COMPONENT = new PublicKey("3pXqzoU9T4uQzVTv1gZJrPNe59qFKy2GP4353JK22Swu");
 export const PLAYER_REGISTRY_COMPONENT = new PublicKey("G3RuJgA65dgqXJdPDsiZVUbiFC6LX8Grz8wBNiRxoe5H");
+export const LEADERBOARD_COMPONENT = new PublicKey("93hpaDv5S1iQEGLZ86DzrR6t9wsrkpEu8vMoPshzdpU8");
 
 // Systems
 export const INIT_GAME_SYSTEM = new PublicKey("2ta7fTqSgTZ59Tr1WcdjUjgVL3uMyjtGed2jE3Eqfv6x");
@@ -17,4 +18,5 @@ export const ALL_COMPONENTS = [
   GAME_CONFIG_COMPONENT,
   PLAYER_STATE_COMPONENT,
   PLAYER_REGISTRY_COMPONENT,
+  LEADERBOARD_COMPONENT,
 ];

@@ -1,8 +1,10 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Connection, PublicKey } from "@solana/web3.js";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { useConnection, useWallet, useAnchorWallet } from "@solana/wallet-adapter-react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
+import * as anchor from "@coral-xyz/anchor";
+import Image from "next/image";
 import { useSolPrice } from "./hooks/useSolPrice";
 import MainMenu from "./components/MainMenu";
 import Game from "./components/Game";
@@ -11,10 +13,57 @@ import { Session } from "@magicblock-labs/bolt-sdk";
 
 const ER_RPC = "http://localhost:7799";
 
+function WalletMenu({ address, onDisconnect }: { address: string; onDisconnect: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const short = `${address.slice(0, 4)}...${address.slice(-4)}`;
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="relative cursor-pointer hover:scale-105 transition-transform"
+      >
+        <Image
+          src="/WALLET_SELECTED.png"
+          alt="Wallet"
+          width={200}
+          height={50}
+          style={{ imageRendering: "pixelated" }}
+        />
+        <span className="absolute inset-0 flex items-center justify-center text-white text-lg pl-10" style={{ textShadow: "0 1px 2px rgba(0,0,0,0.8)" }}>
+          {short}
+        </span>
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-1 bg-black/90 border border-gray-700 flex flex-col min-w-[180px]">
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(address);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            }}
+            className="px-4 py-2 text-sm text-gray-300 hover:bg-gray-800 text-left"
+          >
+            {copied ? "Copied!" : "Copy address"}
+          </button>
+          <button
+            onClick={() => { onDisconnect(); setOpen(false); }}
+            className="px-4 py-2 text-sm text-red-400 hover:bg-gray-800 text-left"
+          >
+            Disconnect
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Home() {
   const { price, history } = useSolPrice();
   const { connection } = useConnection();
-  const { publicKey, signAllTransactions } = useWallet();
+  const { publicKey, signAllTransactions, disconnect } = useWallet();
+  const anchorWallet = useAnchorWallet();
   const [screen, setScreen] = useState<"menu" | "game">("menu");
   const [skin, setSkin] = useState(1);
   const [playerName, setPlayerName] = useState("");
@@ -23,7 +72,18 @@ export default function Home() {
   const [log, setLog] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const erConnection = new Connection(ER_RPC, "confirmed");
+  const erConnection = useMemo(() => new Connection(ER_RPC, "confirmed"), []);
+  const { setVisible: setWalletModalVisible } = useWalletModal();
+
+  // Set global Anchor provider for BOLT SDK
+  useMemo(() => {
+    if (anchorWallet) {
+      const provider = new anchor.AnchorProvider(connection, anchorWallet, {
+        commitment: "confirmed",
+      });
+      anchor.setProvider(provider);
+    }
+  }, [anchorWallet, connection]);
 
   const addLog = useCallback((msg: string) => {
     console.log(msg);
@@ -79,8 +139,23 @@ export default function Home() {
           onJoinGame={handleJoinGame}
         />
         {/* Wallet button */}
-        <div className="absolute top-3 left-3 z-50">
-          <WalletMultiButton />
+        <div className="absolute top-3 right-3 z-50">
+          {publicKey ? (
+            <WalletMenu address={publicKey.toBase58()} onDisconnect={() => disconnect()} />
+          ) : (
+            <button
+              onClick={() => setWalletModalVisible(true)}
+              className="cursor-pointer hover:scale-105 transition-transform"
+            >
+              <Image
+                src="/WALLET_SELECTOR.png"
+                alt="Select Wallet"
+                width={200}
+                height={50}
+                style={{ imageRendering: "pixelated" }}
+              />
+            </button>
+          )}
         </div>
         {/* Loading overlay */}
         {loading && (

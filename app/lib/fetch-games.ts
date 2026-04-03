@@ -19,8 +19,7 @@ export interface GameListing {
  * - Then the fields in struct order:
  *   status (u8), active_players (u8), light (u8),
  *   last_price (u64), last_check_time (i64), red_until (i64),
- *   start_time (i64), lobby_end (i64),
- *   leaderboard ([[u8;32];10] = 320 bytes), finishers (u8)
+ *   start_time (i64), lobby_end (i64)
  */
 const STATUS_OFFSET = 8;         // after discriminator
 const ACTIVE_PLAYERS_OFFSET = 9;
@@ -38,7 +37,7 @@ export async function fetchAllGames(connection: Connection): Promise<GameListing
 
     for (const { pubkey, account } of accounts) {
       const data = account.data;
-      if (data.length < 52) continue; // too small
+      if (data.length < 51) continue; // 8 disc + 3 u8 + 1 u64 + 4 i64 = 51 bytes min
 
       const status = data[STATUS_OFFSET];
       if (status > 2) continue; // invalid

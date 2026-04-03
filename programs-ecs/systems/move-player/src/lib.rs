@@ -1,6 +1,7 @@
 use bolt_lang::*;
 use game_config::GameConfig;
 use player_state::PlayerState;
+use leaderboard::Leaderboard;
 use shared::GameError;
 
 declare_id!("B41Kov8d1moDABp8RdSTRauZUNpwuNwvc312erhWF7w1");
@@ -40,11 +41,11 @@ pub mod move_player {
                 ctx.accounts.player_state.finish_time = now;
 
                 // Push to leaderboard
-                let pos = ctx.accounts.game_config.finishers as usize;
+                let pos = ctx.accounts.leaderboard.count as usize;
                 if pos < 10 {
                     let addr = ctx.accounts.player_state.authority.to_bytes();
-                    ctx.accounts.game_config.leaderboard[pos] = addr;
-                    ctx.accounts.game_config.finishers += 1;
+                    ctx.accounts.leaderboard.entries[pos] = addr;
+                    ctx.accounts.leaderboard.count += 1;
                 }
             }
         }
@@ -56,5 +57,6 @@ pub mod move_player {
     pub struct Components {
         pub player_state: PlayerState,
         pub game_config: GameConfig,
+        pub leaderboard: Leaderboard,
     }
 }
