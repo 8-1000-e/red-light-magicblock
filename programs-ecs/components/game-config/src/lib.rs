@@ -2,6 +2,8 @@ use bolt_lang::*;
 
 declare_id!("HSmw8VMWEBaNTuTbfG5GZAPabRawKr7DWtDAtov6ev3w");
 
+pub const MAX_LEADERBOARD: usize = 10;
+
 #[component(delegate)]
 pub struct GameConfig {
     /// 0 = Waiting, 1 = Playing, 2 = Finished
@@ -18,8 +20,12 @@ pub struct GameConfig {
     pub red_until: i64,
     /// Game start timestamp (set by init-game)
     pub start_time: i64,
-    /// Lobby ends at this timestamp (start_time + 40s). After this, start-game can be called.
+    /// Lobby ends at this timestamp (start_time + 40s)
     pub lobby_end: i64,
+    /// Leaderboard — first 10 players to finish (in order)
+    pub leaderboard: [[u8; 32]; MAX_LEADERBOARD],
+    /// Number of finishers
+    pub finishers: u8,
 }
 
 impl Default for GameConfig {
@@ -33,6 +39,8 @@ impl Default for GameConfig {
             red_until: 0,
             start_time: 0,
             lobby_end: 0,
+            leaderboard: [[0u8; 32]; MAX_LEADERBOARD],
+            finishers: 0,
             bolt_metadata: BoltMetadata::default(),
         }
     }

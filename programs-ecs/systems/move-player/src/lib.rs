@@ -38,6 +38,14 @@ pub mod move_player {
                 ctx.accounts.player_state.y = FINISH_Y;
                 ctx.accounts.player_state.finished = true;
                 ctx.accounts.player_state.finish_time = now;
+
+                // Push to leaderboard
+                let pos = ctx.accounts.game_config.finishers as usize;
+                if pos < 10 {
+                    let addr = ctx.accounts.player_state.authority.to_bytes();
+                    ctx.accounts.game_config.leaderboard[pos] = addr;
+                    ctx.accounts.game_config.finishers += 1;
+                }
             }
         }
 
