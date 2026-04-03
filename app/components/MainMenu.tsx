@@ -177,8 +177,8 @@ export default function MainMenu({ price, connection, onCreateGame, onJoinGame }
         </div>
 
         {/* Footer */}
-        <div className="text-[10px] text-gray-400 mt-4">
-          Built on MagicBlock Ephemeral Rollups + Pyth Lazer
+        <div className="text-[20px] text-gray-400 mt-4">
+          Built on MagicBlock Ephemeral Rollups + Pyth Lazer + Bolt
         </div>
       </div>
     </div>
