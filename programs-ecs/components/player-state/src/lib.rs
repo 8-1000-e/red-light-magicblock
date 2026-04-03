@@ -15,6 +15,8 @@ pub struct PlayerState {
     pub name_len: u8,
     /// Anti speed hack — last slot a move was processed
     pub last_move_slot: u64,
+    /// Skin number (1-based, matches props_X_front.png)
+    pub skin: u8,
 }
 
 impl Default for PlayerState {
@@ -28,6 +30,7 @@ impl Default for PlayerState {
             name: [0u8; 16],
             name_len: 0,
             last_move_slot: 0,
+            skin: 1,
             bolt_metadata: BoltMetadata::default(),
         }
     }

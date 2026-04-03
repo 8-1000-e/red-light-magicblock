@@ -2,7 +2,7 @@ use bolt_lang::*;
 use game_config::GameConfig;
 use player_state::PlayerState;
 use player_registry::PlayerRegistry;
-use shared::{parse_json_str, GameError};
+use shared::{parse_json_str, parse_json_u64, GameError};
 
 declare_id!("5kurbimAJh3B9VB4wNC99JZan6pdo6nDGfZD6tbmw4mi");
 
@@ -24,6 +24,10 @@ pub mod spawn_player {
         ctx.accounts.player_state.finished = false;
         ctx.accounts.player_state.finish_time = 0;
         ctx.accounts.player_state.y = 0;
+
+        // Skin — parse from args: {"name":"Emile","skin":2}
+        let skin = parse_json_u64(&_args, b"skin") as u8;
+        ctx.accounts.player_state.skin = if skin >= 1 { skin } else { 1 };
 
         // Register in player_registry
         let state_bytes = ctx.accounts.player_state.key().to_bytes();
