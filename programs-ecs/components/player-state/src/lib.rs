@@ -8,12 +8,13 @@ pub struct PlayerState {
     pub alive: bool,
     pub finished: bool,
     pub finish_time: i64,
-    /// Y position (0 = top/finish, 100 = bottom/start)
-    pub y: u8,
-    /// Player name (max 16 bytes, no heap)
+    /// Y position: 0 = start (bottom), 300 = finish (top)
+    pub y: u16,
+    /// Player name (max 16 bytes)
     pub name: [u8; 16],
-    /// Actual length of name
     pub name_len: u8,
+    /// Anti speed hack — last slot a move was processed
+    pub last_move_slot: u64,
 }
 
 impl Default for PlayerState {
@@ -26,6 +27,7 @@ impl Default for PlayerState {
             y: 0,
             name: [0u8; 16],
             name_len: 0,
+            last_move_slot: 0,
             bolt_metadata: BoltMetadata::default(),
         }
     }

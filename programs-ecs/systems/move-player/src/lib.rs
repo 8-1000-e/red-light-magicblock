@@ -1,11 +1,12 @@
 use bolt_lang::*;
 use game_config::GameConfig;
 use player_state::PlayerState;
-use shared::{GameError, parse_json_u64};
+use shared::GameError;
 
 declare_id!("B41Kov8d1moDABp8RdSTRauZUNpwuNwvc312erhWF7w1");
 
-const MAX_STEP: u8 = 5; // max movement per tx
+const FINISH_Y: u16 = 300;
+const MIN_SLOT_GAP: u64 = 1; // 1 slot minimum between moves (~50ms on ER)
 
 #[system]
 pub mod move_player {
@@ -14,8 +15,12 @@ pub mod move_player {
         require!(ctx.accounts.player_state.alive, GameError::PlayerDead);
         require!(!ctx.accounts.player_state.finished, GameError::PlayerFinished);
 
-        let step = parse_json_u64(&_args, b"move") as u8;
-        require!(step > 0 && step <= MAX_STEP, GameError::InvalidMove);
+        // Anti speed hack — rate limit by slot
+        let slot = Clock::get()?.slot;
+        if slot < ctx.accounts.player_state.last_move_slot + MIN_SLOT_GAP {
+            return Ok(ctx.accounts); // silently skip, don't fail
+        }
+        ctx.accounts.player_state.last_move_slot = slot;
 
         let now = Clock::get()?.unix_timestamp;
         let is_red = ctx.accounts.game_config.light == 1
@@ -25,12 +30,12 @@ pub mod move_player {
             // Moved during red light → eliminated
             ctx.accounts.player_state.alive = false;
         } else {
-            // Green light → advance
-            let new_y = ctx.accounts.player_state.y.saturating_add(step);
-            ctx.accounts.player_state.y = new_y.min(100);
+            // Green light → advance by 1
+            ctx.accounts.player_state.y = ctx.accounts.player_state.y.saturating_add(1);
 
             // Win check
-            if ctx.accounts.player_state.y >= 100 {
+            if ctx.accounts.player_state.y >= FINISH_Y {
+                ctx.accounts.player_state.y = FINISH_Y;
                 ctx.accounts.player_state.finished = true;
                 ctx.accounts.player_state.finish_time = now;
             }
