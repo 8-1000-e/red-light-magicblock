@@ -168,9 +168,14 @@ export default function Game({
   const movePendingRef = useRef(false);
   const otherSubsRef = useRef<number[]>([]);
 
+  // Responsive scale: 1.0 on desktop (800+), 0.85 min on mobile
+  const scale = Math.max(0.85, Math.min(1, fieldW / 800));
+
   // Map on-chain Y (0=start at 7/9, 200=finish at 0/9) to screen Y
   const screenY = START_LINE_Y - (onChainY / 200) * (START_LINE_Y - FINISH_LINE_Y);
   const playerX = fieldW / 2;
+  const pSize = PLAYER_SIZE * scale;
+  const dSize = DOLL_SIZE * scale;
 
   // ─── Subscribe to GameConfig on ER ───
   useEffect(() => {
@@ -396,37 +401,34 @@ export default function Game({
   return (
     <div className="flex flex-col items-center gap-4 w-full h-full flex-1">
       {/* HUD — pixel card top right */}
-      <div className="absolute top-2 right-2 z-50 p-4 flex flex-col gap-0 items-center justify-center" style={{ imageRendering: "pixelated", width: 180, height: 190, backgroundImage: "url('/CARD.png')", backgroundSize: "100% 100%", backgroundRepeat: "no-repeat" }}>
-        <div className="text-gray-600 text-sm">SOL/USD</div>
+      <div className="absolute top-1 right-1 md:top-2 md:right-2 z-50 p-2 md:p-4 flex flex-col gap-0 items-center justify-center" style={{ imageRendering: "pixelated", width: fieldW < 600 ? 150 : 180, height: fieldW < 600 ? 160 : 190, backgroundImage: "url('/CARD.png')", backgroundSize: "100% 100%", backgroundRepeat: "no-repeat" }}>
+        <div className="text-gray-600 text-xs md:text-sm">SOL/USD</div>
 
         <div className="flex items-baseline gap-1">
-          <span className="text-blue-700 text-lg">last:</span>
-          <span className="text-gray-800 text-xl">{lastPrice?.toFixed(4) ?? "..."}</span>
+          <span className="text-blue-700 text-xs md:text-lg">last:</span>
+          <span className="text-gray-800 text-sm md:text-xl">{lastPrice ? lastPrice.toFixed(2) : "..."}</span>
         </div>
 
-        <div className={`text-2xl ${light === "red" ? "text-red-600" : "text-green-600"}`}>
+        <div className={`text-lg md:text-2xl ${light === "red" ? "text-red-600" : "text-green-600"}`}>
           {light === "red" ? "▼ RED" : "▲ GREEN"}
         </div>
 
         <div className="flex items-baseline gap-1">
-          <span className="text-rose-600 text-lg">now:</span>
-          <span className="text-gray-800 text-xl">{price?.toFixed(4) ?? "..."}</span>
+          <span className="text-rose-600 text-xs md:text-lg">now:</span>
+          <span className="text-gray-800 text-sm md:text-xl">{price?.toFixed(2) ?? "..."}</span>
         </div>
 
         {gameStatus === "playing" && !isSpectate && (
           <div className="flex items-baseline gap-1 mt-1">
             <span className="text-gray-500 text-[10px]">Y:</span>
-            <span className="text-gray-800 text-sm">{onChainY}/200</span>
+            <span className="text-gray-800 text-sm md:text-sm">{onChainY}/200</span>
           </div>
-        )}
-        {isSpectate && (
-          <div className="text-cyan-700 text-xs mt-1 font-bold">SPECTATING</div>
         )}
 
         {(gameStatus === "ended" || isSpectate) && onBack && (
           <button
             onClick={onBack}
-            className="mt-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 border-2 border-gray-500 text-white text-sm transition"
+            className="mt-1 px-3 py-1 md:mt-2 md:px-4 md:py-2 bg-gray-700 hover:bg-gray-600 border-2 border-gray-500 text-white text-sm md:text-sm transition"
           >
             {isSpectate ? "GO BACK" : "MENU"}
           </button>
@@ -449,7 +451,7 @@ export default function Game({
         {/* Doll + lights — above finish line (0/9) */}
         <div
           className="absolute z-20 transition-transform duration-300"
-          style={{ left: fieldW / 2 - DOLL_SIZE / 2, top: FINISH_LINE_Y - DOLL_SIZE * 1.5 - 10, width: DOLL_SIZE, height: DOLL_SIZE * 1.5 }}
+          style={{ left: fieldW / 2 - dSize / 2, top: FINISH_LINE_Y - dSize * 1.5 - 10, width: dSize, height: dSize * 1.5 }}
         >
           <Image
             src={light === "red" ? "/girls front.png" : "/girls back.png"}
@@ -461,7 +463,7 @@ export default function Game({
         {/* Light right */}
         <div
           className="absolute z-19"
-          style={{ left: fieldW / 2 + DOLL_SIZE / 2 + 10, top: FINISH_LINE_Y - 200 - 10, width: 140, height: 200 }}
+          style={{ left: fieldW / 2 + dSize / 2, top: FINISH_LINE_Y - 200 * scale - 10, width: 140 * scale, height: 200 * scale }}
         >
           <Image
             src={light === "red" ? "/red lights.png" : "/green lights.png"}
@@ -474,7 +476,7 @@ export default function Game({
         {/* Light left (mirrored) */}
         <div
           className="absolute z-19"
-          style={{ left: fieldW / 2 - DOLL_SIZE / 2 - 150, top: FINISH_LINE_Y - 200 - 10, width: 140, height: 200, transform: "scaleX(-1)" }}
+          style={{ left: fieldW / 2 - dSize / 2 - 140 * scale, top: FINISH_LINE_Y - 200 * scale - 10, width: 140 * scale, height: 200 * scale, transform: "scaleX(-1)" }}
         >
           <Image
             src={light === "red" ? "/red lights.png" : "/green lights.png"}
@@ -492,7 +494,7 @@ export default function Game({
           const opSprite = !op.alive ? `/props_${op.skin}_dead.png` : opMoving ? `/props_${op.skin}_back.png` : `/props_${op.skin}_front.png`;
           const opHop = (opMoving && op.alive) ? (Math.floor(Date.now() / 200) % 2 === 0 ? -4 : 0) : 0;
           return (
-            <div key={op.statePda} className="absolute z-25" style={{ left: op.xPos - PLAYER_SIZE / 2, top: opScreenY - PLAYER_SIZE + opHop, width: PLAYER_SIZE, height: PLAYER_SIZE * 1.2 }}>
+            <div key={op.statePda} className="absolute z-25" style={{ left: op.xPos - pSize / 2, top: opScreenY - pSize + opHop, width: pSize, height: pSize * 1.2 }}>
               <Image src={opSprite} alt={op.name} fill className="object-contain" style={{ opacity: 0.85 }} />
               <div className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-sm text-white font-bold" style={{ textShadow: "0 1px 4px rgba(0,0,0,0.9)" }}>
                 {op.name}
@@ -513,7 +515,7 @@ export default function Game({
           return (
             <div
               className="absolute z-30"
-              style={{ left: playerX - PLAYER_SIZE / 2, top: screenY - PLAYER_SIZE + hopOffset, width: PLAYER_SIZE, height: PLAYER_SIZE * 1.2 }}
+              style={{ left: playerX - pSize / 2, top: screenY - pSize + hopOffset, width: pSize, height: pSize * 1.2 }}
             >
               <Image src={sprite} alt="player" fill className="object-contain" />
               {/* My name in pink/violet */}
@@ -596,8 +598,8 @@ export default function Game({
           </div>
         )}
 
-        {/* Controls hint during playing */}
-        {gameStatus === "playing" && (
+        {/* Controls hint during playing — hidden on mobile */}
+        {gameStatus === "playing" && fieldW >= 600 && (
           <div className="absolute bottom-4 left-0 w-full text-center z-30">
             <span className="text-lg text-yellow-300 font-bold" style={{ textShadow: "0 2px 8px rgba(0,0,0,0.9), 0 0 20px rgba(250,204,21,0.3)" }}>
               Press W / Z / Arrow Up — DON&apos;T MOVE during RED LIGHT
@@ -605,20 +607,44 @@ export default function Game({
           </div>
         )}
 
+        {/* Mobile move button */}
+        {gameStatus === "playing" && fieldW < 600 && (
+          <div className="absolute z-50 flex flex-col items-center" style={{ bottom: 20, right: 20 }}>
+            <span className="text-sm text-yellow-300 font-bold mb-2" style={{ textShadow: "0 2px 6px rgba(0,0,0,0.9)" }}>PUSH TO MOVE</span>
+            <div
+              className="relative select-none"
+              style={{ width: 160, height: 95, touchAction: "none" }}
+              onTouchStart={(e) => { e.preventDefault(); setKeysDown(prev => new Set(prev).add("w")); }}
+              onTouchEnd={(e) => { e.preventDefault(); setKeysDown(prev => { const n = new Set(prev); n.delete("w"); return n; }); }}
+              onMouseDown={() => setKeysDown(prev => new Set(prev).add("w"))}
+              onMouseUp={() => setKeysDown(prev => { const n = new Set(prev); n.delete("w"); return n; })}
+            >
+              <Image
+                src={keysDown.has("w") ? "/BOUTON_PRESSED.png" : "/BOUTON.png"}
+                alt="move"
+                fill
+                className="object-contain"
+                style={{ imageRendering: "pixelated" }}
+                draggable={false}
+              />
+            </div>
+          </div>
+        )}
+
 
         {/* Leaderboard — top left, visible when there are finishers */}
         {(gameStatus === "playing" || gameStatus === "ended") && leaderboardNames.length > 0 && (
-          <div className="absolute top-3 left-3 z-40 bg-black/60 border border-gray-700 px-3 py-2">
-            <div className="text-xs text-yellow-400 font-bold mb-1">LEADERBOARD</div>
+          <div className="absolute top-1 left-1 md:top-3 md:left-3 z-40 md:bg-black/60 md:border md:border-gray-700 px-4 py-3 md:px-3 md:py-2">
+            <div className="text-base md:text-xs text-yellow-400 font-bold mb-2 md:mb-1">LEADERBOARD</div>
             {leaderboardNames.map((e) => {
               const isMe = e.name === playerName;
               return (
-                <div key={e.pubkey} className="flex items-center gap-2 py-1">
-                  <span className="text-yellow-400 text-sm w-6">#{e.rank}</span>
-                  <div className="relative" style={{ width: 28, height: 34 }}>
+                <div key={e.pubkey} className="flex items-center gap-3 md:gap-2 py-2 md:py-1">
+                  <span className="text-yellow-400 text-lg md:text-sm w-8 md:w-6">#{e.rank}</span>
+                  <div className="relative" style={{ width: fieldW < 600 ? 40 : 28, height: fieldW < 600 ? 48 : 34 }}>
                     <Image src={`/props_${e.skin}_front.png`} alt={e.name} fill className="object-contain" style={{ imageRendering: "pixelated" }} />
                   </div>
-                  <span className={`text-sm font-bold ${isMe ? "text-fuchsia-400" : "text-white"}`} style={{ textShadow: "0 1px 3px rgba(0,0,0,0.9)" }}>{e.name}</span>
+                  <span className={`text-lg md:text-sm font-bold ${isMe ? "text-fuchsia-400" : "text-white"}`} style={{ textShadow: "0 1px 3px rgba(0,0,0,0.9)" }}>{e.name}</span>
                 </div>
               );
             })}
