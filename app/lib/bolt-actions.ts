@@ -27,7 +27,7 @@ import {
   CHECK_PRICE_SYSTEM,
 } from "./program-ids";
 
-let ER_VALIDATOR = new PublicKey("MEUGGrYPxKk17hCr7wpT6s8dtNokZj5U2L57vjYMS8e");
+let ER_VALIDATOR = new PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev");
 
 export function setErValidator(pubkey: string) {
   ER_VALIDATOR = new PublicKey(pubkey);
@@ -69,16 +69,19 @@ type Log = (msg: string) => void;
 
 // ─── Helpers ───
 
-async function prepareTx(tx: Transaction, connection: Connection, payer: PublicKey, retries = 3): Promise<Transaction> {
-  for (let i = 0; i < retries; i++) {
+const RETRY_DELAYS = [3000, 6000, 10000, 15000]; // 34s total — enough for ER rate-limit reset
+
+async function prepareTx(tx: Transaction, connection: Connection, payer: PublicKey): Promise<Transaction> {
+  for (let i = 0; i <= RETRY_DELAYS.length; i++) {
     try {
       const { blockhash } = await connection.getLatestBlockhash();
       tx.recentBlockhash = blockhash;
       tx.feePayer = payer;
       return tx;
     } catch (err) {
-      if (i === retries - 1) throw err;
-      await new Promise(r => setTimeout(r, 1000 * (i + 1))); // 1s, 2s, 3s
+      if (i === RETRY_DELAYS.length) throw err;
+      console.warn(`getLatestBlockhash failed, retrying in ${RETRY_DELAYS[i] / 1000}s...`);
+      await new Promise(r => setTimeout(r, RETRY_DELAYS[i]));
     }
   }
   return tx; // unreachable

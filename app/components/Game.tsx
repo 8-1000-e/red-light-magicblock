@@ -132,7 +132,7 @@ export default function Game({
   // ─── State ───
   const [gameStatus, setGameStatus] = useState<"lobby" | "playing" | "ended">("lobby");
   const [light, setLight] = useState<"green" | "red">("green");
-  const [onChainY, setOnChainY] = useState(0); // 0-300 from chain
+  const [onChainY, setOnChainY] = useState(0); // 0-200 from chain
   const [playerAlive, setPlayerAlive] = useState(true);
   const [playerFinished, setPlayerFinished] = useState(false);
   const [keysDown, setKeysDown] = useState<Set<string>>(new Set());
@@ -150,7 +150,7 @@ export default function Game({
 
   // Map on-chain Y (0=start, 300=finish) to screen Y
   const START_Y = fieldH - 60;
-  const screenY = START_Y - (onChainY / 300) * (START_Y - FINISH_LINE_Y);
+  const screenY = START_Y - (onChainY / 200) * (START_Y - FINISH_LINE_Y);
   const playerX = fieldW / 2;
 
   // ─── Subscribe to GameConfig on ER ───
@@ -372,7 +372,7 @@ export default function Game({
         {gameStatus === "playing" && !isSpectate && (
           <div className="flex items-baseline gap-1 mt-1">
             <span className="text-gray-500 text-[10px]">Y:</span>
-            <span className="text-gray-800 text-sm">{onChainY}/300</span>
+            <span className="text-gray-800 text-sm">{onChainY}/200</span>
           </div>
         )}
         {isSpectate && (
@@ -439,7 +439,7 @@ export default function Game({
 
         {/* Other players */}
         {gameStatus === "playing" && otherPlayers.map((op) => {
-          const opScreenY = START_Y - (op.y / 300) * (START_Y - FINISH_LINE_Y);
+          const opScreenY = START_Y - (op.y / 200) * (START_Y - FINISH_LINE_Y);
           const opMoving = op.y !== op.prevY;
           const opSprite = !op.alive ? `/props_${op.skin}_dead.png` : opMoving ? `/props_${op.skin}_back.png` : `/props_${op.skin}_front.png`;
           const opHop = (opMoving && op.alive) ? (Math.floor(Date.now() / 200) % 2 === 0 ? -4 : 0) : 0;
