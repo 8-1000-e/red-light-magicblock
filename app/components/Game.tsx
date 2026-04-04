@@ -24,6 +24,24 @@ interface LobbyPlayer {
   pubkey: string;
 }
 
+interface OtherPlayer {
+  name: string;
+  skin: number;
+  y: number;
+  alive: boolean;
+  finished: boolean;
+  xPos: number; // fixed random X position on screen
+  statePda: string;
+}
+
+// Deterministic "random" X from pubkey string
+function hashToX(pubkey: string, fieldW: number): number {
+  let h = 0;
+  for (let i = 0; i < pubkey.length; i++) h = ((h << 5) - h + pubkey.charCodeAt(i)) | 0;
+  const margin = PLAYER_SIZE;
+  return margin + Math.abs(h % (fieldW - margin * 2));
+}
+
 interface Props {
   price: number | null;
   history: PricePoint[];
@@ -36,15 +54,17 @@ interface Props {
   playerEntityPda?: PublicKey | null;
   erConnection?: Connection | null;
   pythPricePda?: PublicKey;
+  gameConfigPda?: PublicKey | null; // direct PDA for spectate mode
 }
 
 // ─── Parse on-chain data ───
 
 function parsePlayerState(data: Buffer) {
-  if (data.length < 62) return null;
-  // disc(8) + authority(32) + alive(1) + finished(1) + finish_time(8) + y(2) + name([u8;16]) + name_len(1) + last_move_slot(8) + skin(1)
-  const nameLen = data.readUInt8(52);
-  const nameBytes = data.slice(43, 43 + Math.min(nameLen, 16));
+  if (data.length < 78) return null;
+  // disc(8) + authority(32) + alive(1) + finished(1) + finish_time(i64=8) + y(u16=2) + name([u8;16]) + name_len(u8=1) + last_move_slot(u64=8) + skin(u8=1)
+  // offsets: 8=authority, 40=alive, 41=finished, 42=finish_time, 50=y, 52=name, 68=name_len, 69=last_move_slot, 77=skin
+  const nameLen = data.readUInt8(68);
+  const nameBytes = data.slice(52, 52 + Math.min(nameLen, 16));
   return {
     authority: new PublicKey(data.slice(8, 40)),
     alive: data.readUInt8(40) === 1,
@@ -52,7 +72,7 @@ function parsePlayerState(data: Buffer) {
     y: data.readUInt16LE(50),
     name: new TextDecoder().decode(nameBytes),
     nameLen,
-    skin: data.readUInt8(61),
+    skin: data.readUInt8(77),
   };
 }
 
@@ -81,8 +101,15 @@ function parseGameConfig(data: Buffer) {
 export default function Game({
   price, history, skin = 1, playerName = "Player", onBack,
   session, worldPda, gameEntityPda, playerEntityPda, erConnection,
-  pythPricePda = DEFAULT_PYTH_PDA,
+  pythPricePda = DEFAULT_PYTH_PDA, gameConfigPda: gameConfigPdaProp,
 }: Props) {
+  const isSpectate = !session;
+  // In normal mode, derive PDAs from entity. In spectate mode, use direct PDA.
+  const resolvedGameConfigPda = gameConfigPdaProp
+    || (gameEntityPda ? FindComponentPda({ componentId: GAME_CONFIG_COMPONENT, entity: gameEntityPda }) : null);
+  const resolvedRegistryPda = gameEntityPda
+    ? FindComponentPda({ componentId: PLAYER_REGISTRY_COMPONENT, entity: gameEntityPda })
+    : null;
   const fieldRef = useRef<HTMLDivElement>(null);
   const [fieldW, setFieldW] = useState(800);
   const [fieldH, setFieldH] = useState(600);
@@ -115,8 +142,10 @@ export default function Game({
   const [startGameSent, setStartGameSent] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const [lastPrice, setLastPrice] = useState<number | null>(null);
+  const [otherPlayers, setOtherPlayers] = useState<OtherPlayer[]>([]);
   const gameStartRef = useRef(0);
   const movePendingRef = useRef(false);
+  const otherSubsRef = useRef<number[]>([]);
 
   // Map on-chain Y (0=start, 300=finish) to screen Y
   const START_Y = fieldH - 60;
@@ -125,8 +154,8 @@ export default function Game({
 
   // ─── Subscribe to GameConfig on ER ───
   useEffect(() => {
-    if (!erConnection || !gameEntityPda) return;
-    const pda = FindComponentPda({ componentId: GAME_CONFIG_COMPONENT, entity: gameEntityPda });
+    if (!erConnection || !resolvedGameConfigPda) return;
+    const pda = resolvedGameConfigPda;
 
     const handleConfig = (data: Buffer) => {
       const cfg = parseGameConfig(data);
@@ -147,7 +176,7 @@ export default function Game({
     });
     const subId = erConnection.onAccountChange(pda, (info) => handleConfig(info.data as Buffer));
     return () => { erConnection.removeAccountChangeListener(subId); };
-  }, [erConnection, gameEntityPda]);
+  }, [erConnection, resolvedGameConfigPda]);
 
   // ─── Subscribe to own PlayerState on ER ───
   useEffect(() => {
@@ -165,41 +194,77 @@ export default function Game({
     return () => { erConnection.removeAccountChangeListener(subId); };
   }, [erConnection, playerEntityPda]);
 
-  // ─── Subscribe to PlayerRegistry on ER → discover players ───
+  // ─── Subscribe to PlayerRegistry on ER → discover players + subscribe to their state ───
   useEffect(() => {
-    if (!erConnection || !gameEntityPda) return;
-    const pda = FindComponentPda({ componentId: PLAYER_REGISTRY_COMPONENT, entity: gameEntityPda });
+    if (!erConnection || !resolvedRegistryPda) return;
+    const pda = resolvedRegistryPda;
+    const myAuthority = session?.signer?.publicKey?.toBase58() || playerEntityPda?.toBase58() || "";
 
-    const fetchPlayers = async (playerStatePdas: PublicKey[]) => {
+    const processRegistry = async (playerStatePdas: PublicKey[]) => {
+      // Fetch lobby info
       const players: LobbyPlayer[] = [];
+      const others: OtherPlayer[] = [];
       for (const statePda of playerStatePdas) {
         try {
           const info = await erConnection.getAccountInfo(statePda);
           if (!info) continue;
           const ps = parsePlayerState(info.data as Buffer);
-          if (ps) {
-            players.push({
+          if (!ps) continue;
+          players.push({ name: ps.name || "???", skin: ps.skin || 1, pubkey: ps.authority.toBase58() });
+          // Track others (not me) for in-game rendering
+          if (playerEntityPda && statePda.toBase58() !== FindComponentPda({ componentId: PLAYER_STATE_COMPONENT, entity: playerEntityPda }).toBase58()) {
+            others.push({
               name: ps.name || "???",
               skin: ps.skin || 1,
-              pubkey: ps.authority.toBase58(),
+              y: ps.y,
+              alive: ps.alive,
+              finished: ps.finished,
+              xPos: hashToX(statePda.toBase58(), fieldW),
+              statePda: statePda.toBase58(),
             });
           }
         } catch { /* skip */ }
       }
       setLobbyPlayers(players);
+      setOtherPlayers(others);
+
+      // Unsubscribe old subs
+      for (const s of otherSubsRef.current) {
+        erConnection.removeAccountChangeListener(s);
+      }
+      otherSubsRef.current = [];
+
+      // Subscribe to each other player's state for live Y updates
+      for (const statePda of playerStatePdas) {
+        if (playerEntityPda && statePda.toBase58() === FindComponentPda({ componentId: PLAYER_STATE_COMPONENT, entity: playerEntityPda }).toBase58()) continue;
+        const subId = erConnection.onAccountChange(statePda, (info) => {
+          const ps = parsePlayerState(info.data as Buffer);
+          if (!ps) return;
+          setOtherPlayers(prev => prev.map(op =>
+            op.statePda === statePda.toBase58()
+              ? { ...op, y: ps.y, alive: ps.alive, finished: ps.finished }
+              : op
+          ));
+        });
+        otherSubsRef.current.push(subId);
+      }
     };
 
     erConnection.getAccountInfo(pda).then(info => {
       if (!info) return;
       const reg = parsePlayerRegistry(info.data as Buffer);
-      if (reg && reg.count > 0) fetchPlayers(reg.playerStates);
+      if (reg && reg.count > 0) processRegistry(reg.playerStates);
     });
     const subId = erConnection.onAccountChange(pda, (accountInfo) => {
       const reg = parsePlayerRegistry(accountInfo.data as Buffer);
-      if (reg && reg.count > 0) fetchPlayers(reg.playerStates);
+      if (reg && reg.count > 0) processRegistry(reg.playerStates);
     });
-    return () => { erConnection.removeAccountChangeListener(subId); };
-  }, [erConnection, gameEntityPda]);
+    return () => {
+      erConnection.removeAccountChangeListener(subId);
+      for (const s of otherSubsRef.current) erConnection.removeAccountChangeListener(s);
+      otherSubsRef.current = [];
+    };
+  }, [erConnection, resolvedRegistryPda, playerEntityPda, fieldW]);
 
   // ─── Lobby countdown from on-chain lobby_end ───
   useEffect(() => {
@@ -301,19 +366,22 @@ export default function Game({
           <span className="text-gray-800 text-xl">{price?.toFixed(4) ?? "..."}</span>
         </div>
 
-        {gameStatus === "playing" && (
+        {gameStatus === "playing" && !isSpectate && (
           <div className="flex items-baseline gap-1 mt-1">
             <span className="text-gray-500 text-[10px]">Y:</span>
             <span className="text-gray-800 text-sm">{onChainY}/300</span>
           </div>
         )}
+        {isSpectate && (
+          <div className="text-cyan-700 text-xs mt-1 font-bold">SPECTATING</div>
+        )}
 
-        {gameStatus === "ended" && onBack && (
+        {(gameStatus === "ended" || isSpectate) && onBack && (
           <button
             onClick={onBack}
             className="mt-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 border-2 border-gray-500 text-white text-sm transition"
           >
-            MENU
+            {isSpectate ? "GO BACK" : "MENU"}
           </button>
         )}
       </div>
@@ -366,7 +434,21 @@ export default function Game({
           />
         </div>
 
-        {/* Player sprite */}
+        {/* Other players */}
+        {gameStatus === "playing" && otherPlayers.map((op) => {
+          const opScreenY = START_Y - (op.y / 300) * (START_Y - FINISH_LINE_Y);
+          const opSprite = !op.alive ? `/props_${op.skin}_dead.png` : `/props_${op.skin}_back.png`;
+          return (
+            <div key={op.statePda} className="absolute z-25" style={{ left: op.xPos - PLAYER_SIZE / 2, top: opScreenY - PLAYER_SIZE, width: PLAYER_SIZE, height: PLAYER_SIZE * 1.2 }}>
+              <Image src={opSprite} alt={op.name} fill className="object-contain" style={{ opacity: 0.85 }} />
+              <div className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs text-white font-bold" style={{ textShadow: "0 1px 3px rgba(0,0,0,0.8)" }}>
+                {op.name}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* My player sprite */}
         {(() => {
           let sprite = `/props_${skin}_front.png`;
           if (!playerAlive) sprite = `/props_${skin}_dead.png`;
@@ -381,6 +463,10 @@ export default function Game({
               style={{ left: playerX - PLAYER_SIZE / 2, top: screenY - PLAYER_SIZE + hopOffset, width: PLAYER_SIZE, height: PLAYER_SIZE * 1.2 }}
             >
               <Image src={sprite} alt="player" fill className="object-contain" />
+              {/* My name in pink/violet */}
+              <div className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-xs font-bold" style={{ color: "#e879f9", textShadow: "0 1px 4px rgba(0,0,0,0.9)" }}>
+                {playerName}
+              </div>
               <div
                 className="absolute rounded-full"
                 style={{ bottom: 8, left: '15%', width: '70%', height: 8, background: 'radial-gradient(ellipse, rgba(0,0,0,0.35) 0%, transparent 70%)' }}
@@ -411,7 +497,7 @@ export default function Game({
 
               {/* Player list — real players from chain */}
               <div className="flex flex-col items-center gap-3 mt-4 relative" style={{ backgroundImage: "url('/lobby_player.png')", backgroundSize: "100% 100%", backgroundRepeat: "no-repeat", padding: "40px 50px", minWidth: 380, minHeight: 200 }}>
-                <div className="text-lg text-gray-600">
+                <div className="text-xl text-white font-bold" style={{ textShadow: "0 2px 4px rgba(0,0,0,0.5)" }}>
                   PLAYERS ({lobbyPlayers.length}/10)
                 </div>
                 <div className="flex flex-wrap gap-6 justify-center">
@@ -426,7 +512,7 @@ export default function Game({
                           style={{ imageRendering: "pixelated" }}
                         />
                       </div>
-                      <span className="text-sm text-gray-700">
+                      <span className="text-base text-white font-bold" style={{ textShadow: "0 1px 3px rgba(0,0,0,0.7)" }}>
                         {p.name}
                       </span>
                     </div>
@@ -450,7 +536,7 @@ export default function Game({
                 {shareCopied ? "LINK COPIED!" : "SHARE GAME"}
               </button>
 
-              <div className="text-sm text-white/40 mt-2">
+              <div className="text-lg text-white font-bold mt-3" style={{ textShadow: "0 2px 6px rgba(0,0,0,0.8)" }}>
                 Press W or Arrow Up to move — don&apos;t move during RED LIGHT
               </div>
             </div>

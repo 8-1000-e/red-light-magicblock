@@ -10,11 +10,13 @@ const REFRESH_INTERVAL = 5000; // refresh game list every 5s
 interface Props {
   price: number | null;
   connection: Connection | null;
+  erConnection?: Connection | null;
   onCreateGame: (skin: number, name: string) => void;
   onJoinGame: (gameId: string, skin: number, name: string) => void;
+  onSpectateGame: (gameConfigPda: string) => void;
 }
 
-export default function MainMenu({ price, connection, onCreateGame, onJoinGame }: Props) {
+export default function MainMenu({ price, connection, erConnection, onCreateGame, onJoinGame, onSpectateGame }: Props) {
   const [playerName, setPlayerName] = useState("");
   const [selectedSkin, setSelectedSkin] = useState(1);
   const [games, setGames] = useState<GameListing[]>([]);
@@ -25,7 +27,7 @@ export default function MainMenu({ price, connection, onCreateGame, onJoinGame }
     if (!connection) return;
 
     const refresh = async () => {
-      const list = await fetchAllGames(connection);
+      const list = await fetchAllGames(connection, erConnection);
       setGames(list);
       setLoading(false);
     };
@@ -140,31 +142,43 @@ export default function MainMenu({ price, connection, onCreateGame, onJoinGame }
 
           <div className="flex flex-col gap-2">
             {games.map((game) => {
-              const isLobby = game.status === 0;
-              const countdown = isLobby ? Math.max(0, game.lobbyEnd - now) : 0;
+              // Use on-chain status (from ER) to determine lobby vs playing
+              const inLobby = game.status === 0;
 
               return (
-                <button
+                <div
                   key={game.pubkey}
-                  onClick={() => onJoinGame(game.pubkey, selectedSkin, playerName)}
-                  disabled={!isLobby || playerName.length === 0}
-                  className="w-full flex items-center justify-between px-4 py-3 bg-black/40 border border-gray-700 hover:border-gray-500 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:border-gray-700 transition"
+                  className="w-full flex items-center justify-between px-4 py-3 bg-black/40 border border-gray-700"
                 >
                   <div className="flex items-center gap-3">
                     <div className={`w-3 h-3 rounded-full ${
-                      isLobby ? "bg-green-500 animate-pulse" : "bg-red-500"
+                      inLobby ? "bg-green-500 animate-pulse" : "bg-yellow-500"
                     }`} />
                     <span className="text-white text-sm">{game.pubkey.slice(0, 8)}...</span>
+                    <span className="text-gray-400 text-xs">{game.activePlayers}/10</span>
                   </div>
-                  <div className="flex items-center gap-4 text-xs">
-                    <span className="text-gray-300">{game.activePlayers}/10</span>
-                    {isLobby ? (
-                      <span className="text-yellow-400">{countdown}s</span>
+                  <div className="flex items-center gap-2">
+                    {inLobby ? (
+                      <>
+                        <span className="text-yellow-400 text-xs mr-2">LOBBY</span>
+                        <button
+                          onClick={() => onJoinGame(game.pubkey, selectedSkin, playerName)}
+                          disabled={playerName.length === 0}
+                          className="px-3 py-1 bg-green-700 hover:bg-green-600 disabled:bg-gray-700 disabled:text-gray-500 border border-green-900 disabled:border-gray-600 text-white text-xs transition"
+                        >
+                          JOIN
+                        </button>
+                      </>
                     ) : (
-                      <span className="text-red-400">IN GAME</span>
+                      <button
+                        onClick={() => onSpectateGame(game.pubkey)}
+                        className="px-3 py-1 bg-cyan-700 hover:bg-cyan-600 border border-cyan-900 text-white text-xs transition"
+                      >
+                        SPECTATE
+                      </button>
                     )}
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>

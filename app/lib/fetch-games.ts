@@ -11,68 +11,81 @@ export interface GameListing {
 }
 
 /**
- * Fetch all GameConfig accounts from on-chain.
- * Parses the raw bytes to extract game state.
- *
- * BOLT component layout:
- * - 8 bytes: discriminator
- * - Then the fields in struct order:
- *   status (u8), active_players (u8), light (u8),
- *   last_price (u64), last_check_time (i64), red_until (i64),
- *   start_time (i64), lobby_end (i64)
+ * BOLT component layout for GameConfig:
+ * disc(8) + status(1) + active_players(1) + light(1) +
+ * last_price(8) + last_check_time(8) + red_until(8) +
+ * start_time(8) + lobby_end(8)
  */
-const STATUS_OFFSET = 8;         // after discriminator
+const STATUS_OFFSET = 8;
 const ACTIVE_PLAYERS_OFFSET = 9;
 const LIGHT_OFFSET = 10;
-const START_TIME_OFFSET = 35;    // 8 + 1 + 1 + 1 + 8 + 8 + 8
-const LOBBY_END_OFFSET = 43;     // START_TIME_OFFSET + 8
+const START_TIME_OFFSET = 35;
+const LOBBY_END_OFFSET = 43;
 
-export async function fetchAllGames(connection: Connection): Promise<GameListing[]> {
+function parseGameConfigData(data: Buffer | Uint8Array): GameListing | null {
+  if (data.length < 51) return null;
+  const status = data[STATUS_OFFSET];
+  if (status > 2) return null;
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  return {
+    pubkey: "",
+    status,
+    activePlayers: data[ACTIVE_PLAYERS_OFFSET],
+    light: data[LIGHT_OFFSET],
+    startTime: Number(view.getBigInt64(START_TIME_OFFSET, true)),
+    lobbyEnd: Number(view.getBigInt64(LOBBY_END_OFFSET, true)),
+  };
+}
+
+/**
+ * Fetch game list from L1, then refresh each game's state from ER
+ * (activePlayers, status, light are updated on ER, not L1)
+ */
+export async function fetchAllGames(
+  l1Connection: Connection,
+  erConnection?: Connection | null,
+): Promise<GameListing[]> {
   try {
-    const accounts = await connection.getProgramAccounts(GAME_CONFIG_COMPONENT, {
+    // 1. Get all GameConfig PDAs from L1
+    const accounts = await l1Connection.getProgramAccounts(GAME_CONFIG_COMPONENT, {
       commitment: "confirmed",
     });
 
     const games: GameListing[] = [];
 
     for (const { pubkey, account } of accounts) {
-      const data = account.data;
-      if (data.length < 51) continue; // 8 disc + 3 u8 + 1 u64 + 4 i64 = 51 bytes min
-
-      const status = data[STATUS_OFFSET];
-      if (status > 2) continue; // invalid
-
-      const activePlayers = data[ACTIVE_PLAYERS_OFFSET];
-      const light = data[LIGHT_OFFSET];
-
-      // Read i64 start_time and lobby_end
-      const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
-      const startTime = Number(view.getBigInt64(START_TIME_OFFSET, true));
-      const lobbyEnd = Number(view.getBigInt64(LOBBY_END_OFFSET, true));
-
-      games.push({
-        pubkey: pubkey.toBase58(),
-        status,
-        activePlayers,
-        light,
-        startTime,
-        lobbyEnd,
-      });
+      const parsed = parseGameConfigData(account.data);
+      if (!parsed) continue;
+      parsed.pubkey = pubkey.toBase58();
+      games.push(parsed);
     }
 
-    // Filter: no Finished, no invalid lobby_end, no stale (lobby closed > 20min ago)
-    const now = Math.floor(Date.now() / 1000);
+    // 2. If ER connection available, refresh live data from ER
+    if (erConnection) {
+      const pdas = games.map(g => new PublicKey(g.pubkey));
+      const erAccounts = await erConnection.getMultipleAccountsInfo(pdas);
+      for (let i = 0; i < games.length; i++) {
+        const erData = erAccounts[i]?.data;
+        if (!erData) continue;
+        const erParsed = parseGameConfigData(erData as Buffer);
+        if (!erParsed) continue;
+        // Override with ER state (live data)
+        games[i].status = erParsed.status;
+        games[i].activePlayers = erParsed.activePlayers;
+        games[i].light = erParsed.light;
+      }
+    }
+
+    // 3. Filter
+    const maxLobbyEnd = Math.max(...games.map(g => g.lobbyEnd).filter(t => t > 0), 0);
     return games
       .filter((g) => {
         if (g.status > 1) return false;
-        if (g.lobbyEnd === 0) return false;
-        // If lobby ended more than 20min ago and still "Waiting", it's stale
-        if (g.status === 0 && g.lobbyEnd < now - 20 * 60) return false;
-        // If Playing and started more than 20min ago, hide too
-        if (g.status === 1 && g.startTime > 0 && g.startTime < now - 20 * 60) return false;
+        if (g.lobbyEnd === 0 && g.startTime === 0) return false;
+        if (maxLobbyEnd > 0 && g.lobbyEnd > 0 && g.lobbyEnd < maxLobbyEnd - 30 * 60) return false;
         return true;
       })
-      .sort((a, b) => a.status - b.status || b.lobbyEnd - a.lobbyEnd);
+      .sort((a, b) => b.lobbyEnd - a.lobbyEnd);
   } catch (e) {
     console.error("Failed to fetch games:", e);
     return [];

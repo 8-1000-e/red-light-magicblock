@@ -2,7 +2,7 @@ use bolt_lang::*;
 use game_config::GameConfig;
 declare_id!("2ta7fTqSgTZ59Tr1WcdjUjgVL3uMyjtGed2jE3Eqfv6x");
 
-const LOBBY_DURATION: i64 = 40; // 40 seconds lobby
+const LOBBY_DURATION: i64 = 60; // 40 seconds lobby
 
 #[system]
 pub mod init_game {

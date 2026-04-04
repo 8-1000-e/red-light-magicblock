@@ -8,7 +8,7 @@ import Image from "next/image";
 import { useSolPrice } from "./hooks/useSolPrice";
 import MainMenu from "./components/MainMenu";
 import Game from "./components/Game";
-import { createAndJoinGame, GameState } from "./lib/bolt-actions";
+import { createAndJoinGame, joinExistingGame, resolveGameEntity, GameState } from "./lib/bolt-actions";
 import { Session } from "@magicblock-labs/bolt-sdk";
 
 const ER_RPC = "http://localhost:7799";
@@ -119,10 +119,51 @@ export default function Home() {
     setPhase("");
   }, [publicKey, signAllTransactions, connection, erConnection, addLog]);
 
-  const handleJoinGame = useCallback(async (gameId: string, selectedSkin: number, name: string) => {
-    // TODO: resolve gameId → worldPda + gameEntityPda, then createSessionAndJoin
-    addLog(`Joining game ${gameId.slice(0, 8)}... (not yet implemented)`);
-  }, [addLog]);
+  const handleJoinGame = useCallback(async (gameConfigPda: string, selectedSkin: number, name: string) => {
+    if (!publicKey || !signAllTransactions) {
+      addLog("Connect your wallet first!");
+      return;
+    }
+    setLoading(true);
+    setLog([]);
+    setSkin(selectedSkin);
+    setPlayerName(name);
+    try {
+      setPhase("joining");
+      addLog("Resolving game...");
+      const resolved = await resolveGameEntity(new PublicKey(gameConfigPda), connection);
+      if (!resolved) {
+        addLog("Error: Could not find game entity");
+        setLoading(false);
+        setPhase("");
+        return;
+      }
+      addLog(`World: ${resolved.worldPda.toBase58().slice(0, 16)}...`);
+      addLog(`Game entity: ${resolved.gameEntityPda.toBase58().slice(0, 16)}...`);
+
+      const { session: sess, playerEntityPda } = await joinExistingGame(
+        connection, erConnection, publicKey, signAllTransactions,
+        resolved.worldPda, resolved.gameEntityPda,
+        name, selectedSkin, addLog,
+      );
+      setGameState({ ...resolved, playerEntityPda });
+      setSession(sess);
+
+      addLog("Done! Entering game...");
+      setScreen("game");
+    } catch (e: any) {
+      addLog(`Error: ${e.message}`);
+      console.error(e);
+    }
+    setLoading(false);
+    setPhase("");
+  }, [publicKey, signAllTransactions, connection, erConnection, addLog]);
+
+  const handleSpectateGame = useCallback((gameConfigPda: string) => {
+    setGameState({ worldPda: PublicKey.default, gameEntityPda: PublicKey.default, gameConfigPda: new PublicKey(gameConfigPda) });
+    setSession(null);
+    setScreen("game");
+  }, []);
 
   if (screen === "menu") {
     return (
@@ -130,8 +171,10 @@ export default function Home() {
         <MainMenu
           price={price}
           connection={connection}
+          erConnection={erConnection}
           onCreateGame={handleCreateGame}
           onJoinGame={handleJoinGame}
+          onSpectateGame={handleSpectateGame}
         />
         {/* Wallet button */}
         <div className="absolute top-3 right-3 z-50">
@@ -188,7 +231,14 @@ export default function Home() {
         price={price}
         history={history}
         skin={skin}
-        onBack={() => setScreen("menu")}
+        playerName={playerName}
+        onBack={() => { setScreen("menu"); setGameState(null); setSession(null); }}
+        session={session}
+        worldPda={gameState?.worldPda}
+        gameEntityPda={gameState?.gameEntityPda}
+        playerEntityPda={gameState?.playerEntityPda}
+        erConnection={erConnection}
+        gameConfigPda={gameState?.gameConfigPda}
       />
     </div>
   );

@@ -5,9 +5,13 @@ import {
   InitializeComponent,
   ApplySystem,
   FindComponentPda,
+  FindEntityPda,
+  FindWorldPda,
+  FindRegistryPda,
   createDelegateInstruction,
   CreateSession,
   Session,
+  BN as BoltBN,
 } from "@magicblock-labs/bolt-sdk";
 import { BN } from "@coral-xyz/anchor";
 import {
@@ -29,10 +33,36 @@ export function setErValidator(pubkey: string) {
   ER_VALIDATOR = new PublicKey(pubkey);
 }
 
+// Resolve a GameConfig component PDA back to worldPda + gameEntityPda.
+// Reads world count from registry, then checks recent worlds (entity 0 = game entity).
+export async function resolveGameEntity(
+  gameConfigPda: PublicKey,
+  connection: Connection,
+): Promise<{ worldPda: PublicKey; gameEntityPda: PublicKey } | null> {
+  const target = gameConfigPda.toBase58();
+
+  // Read world count from registry
+  const registryPda = FindRegistryPda({});
+  const registryInfo = await connection.getAccountInfo(registryPda);
+  const worldCount = registryInfo ? Number(registryInfo.data.readBigUInt64LE(8)) : 100;
+
+  // Search last 100 worlds, entity 0 (game entity is always first)
+  const searchFrom = Math.max(0, worldCount - 100);
+  for (let w = worldCount; w >= searchFrom; w--) {
+    const ePda = FindEntityPda({ worldId: new BoltBN(w), entityId: new BoltBN(0) });
+    const cPda = FindComponentPda({ componentId: GAME_CONFIG_COMPONENT, entity: ePda });
+    if (cPda.toBase58() === target) {
+      return { worldPda: FindWorldPda({ worldId: new BoltBN(w) }), gameEntityPda: ePda };
+    }
+  }
+  return null;
+}
+
 export interface GameState {
   worldPda: PublicKey;
   gameEntityPda: PublicKey;
   playerEntityPda?: PublicKey;
+  gameConfigPda?: PublicKey;
 }
 
 type Log = (msg: string) => void;
