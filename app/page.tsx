@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { useConnection, useWallet, useAnchorWallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
@@ -67,6 +67,16 @@ export default function Home() {
   const [screen, setScreen] = useState<"menu" | "game">("menu");
   const [skin, setSkin] = useState(1);
   const [playerName, setPlayerName] = useState("");
+  const [pendingJoin, setPendingJoin] = useState<{gameConfigPda: string; worldPda: string; gameEntityPda: string} | null>(null);
+
+  // Read ?join=&world=&entity= params from URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const join = params.get("join");
+    const world = params.get("world");
+    const entity = params.get("entity");
+    if (join && world && entity) setPendingJoin({ gameConfigPda: join, worldPda: world, gameEntityPda: entity });
+  }, []);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [log, setLog] = useState<string[]>([]);
@@ -119,7 +129,7 @@ export default function Home() {
     setPhase("");
   }, [publicKey, signAllTransactions, connection, erConnection, addLog]);
 
-  const handleJoinGame = useCallback(async (gameConfigPda: string, selectedSkin: number, name: string) => {
+  const handleJoinGame = useCallback(async (gameConfigPda: string, selectedSkin: number, name: string, worldPdaStr?: string, gameEntityPdaStr?: string) => {
     if (!publicKey || !signAllTransactions) {
       addLog("Connect your wallet first!");
       return;
@@ -130,8 +140,14 @@ export default function Home() {
     setPlayerName(name);
     try {
       setPhase("joining");
-      addLog("Resolving game...");
-      const resolved = await resolveGameEntity(new PublicKey(gameConfigPda), connection);
+      let resolved: { worldPda: PublicKey; gameEntityPda: PublicKey } | null = null;
+
+      if (worldPdaStr && gameEntityPdaStr) {
+        resolved = { worldPda: new PublicKey(worldPdaStr), gameEntityPda: new PublicKey(gameEntityPdaStr) };
+      } else {
+        addLog("Resolving game...");
+        resolved = await resolveGameEntity(new PublicKey(gameConfigPda), connection);
+      }
       if (!resolved) {
         addLog("Error: Could not find game entity");
         setLoading(false);
@@ -150,6 +166,8 @@ export default function Home() {
       setSession(sess);
 
       addLog("Done! Entering game...");
+      setPendingJoin(null);
+      window.history.replaceState({}, "", "/");
       setScreen("game");
     } catch (e: any) {
       addLog(`Error: ${e.message}`);
@@ -159,11 +177,98 @@ export default function Home() {
     setPhase("");
   }, [publicKey, signAllTransactions, connection, erConnection, addLog]);
 
-  const handleSpectateGame = useCallback((gameConfigPda: string) => {
-    setGameState({ worldPda: PublicKey.default, gameEntityPda: PublicKey.default, gameConfigPda: new PublicKey(gameConfigPda) });
+  const handleSpectateGame = useCallback(async (gameConfigPda: string) => {
+    // resolveGameEntity uses L1 for world count — works for both localnet and devnet
+    const resolved = await resolveGameEntity(new PublicKey(gameConfigPda), connection);
+    if (resolved) {
+      setGameState({ ...resolved, gameConfigPda: new PublicKey(gameConfigPda) });
+    } else {
+      // Fallback: no entity PDA, spectate with config-only (no players visible)
+      console.warn("Spectate: could not resolve game entity, players won't be visible");
+      setGameState({ worldPda: PublicKey.default, gameEntityPda: PublicKey.default, gameConfigPda: new PublicKey(gameConfigPda) });
+    }
     setSession(null);
     setScreen("game");
-  }, []);
+  }, [connection]);
+
+  // ─── Invite screen (from ?join= link) ───
+  if (pendingJoin && screen === "menu") {
+    return (
+      <div className="min-h-screen w-screen flex flex-col items-center justify-center relative">
+        <div className="fixed inset-0" style={{
+          backgroundImage: "url('/LOBBY.jpg')",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          filter: "blur(6px) brightness(0.4)",
+        }} />
+        {/* Wallet button */}
+        <div className="absolute top-3 right-3 z-50">
+          {publicKey ? (
+            <WalletMenu address={publicKey.toBase58()} onDisconnect={() => disconnect()} />
+          ) : (
+            <button
+              onClick={() => setWalletModalVisible(true)}
+              className="cursor-pointer hover:scale-105 transition-transform"
+            >
+              <Image src="/WALLET_SELECTOR.png" alt="Select Wallet" width={200} height={50} style={{ imageRendering: "pixelated" }} />
+            </button>
+          )}
+        </div>
+        <div className="relative z-10 flex flex-col items-center gap-4 w-full max-w-sm px-4">
+          <div className="text-5xl text-yellow-400" style={{ textShadow: "0 0 30px rgba(250, 204, 21, 0.3), 0 6px 0 #92400e" }}>
+            SOL
+          </div>
+          <div className="text-3xl text-white" style={{ textShadow: "0 4px 0 #374151" }}>
+            SURVIVORS
+          </div>
+          <div className="text-lg text-cyan-400 mt-4">You&apos;ve been invited!</div>
+
+          {/* Skin selector */}
+          <div className="flex items-center gap-6">
+            <button onClick={() => setSkin((s) => s <= 1 ? 5 : s - 1)} className="text-3xl text-white/60 hover:text-white transition">&lt;</button>
+            <div className="relative" style={{ width: 80, height: 96 }}>
+              <Image src={`/props_${skin}_front.png`} alt={`skin ${skin}`} fill className="object-contain" style={{ imageRendering: "pixelated" }} onError={(e) => { (e.target as HTMLImageElement).src = "/props_1_front.png"; }} />
+            </div>
+            <button onClick={() => setSkin((s) => s >= 5 ? 1 : s + 1)} className="text-3xl text-white/60 hover:text-white transition">&gt;</button>
+          </div>
+
+          <input
+            type="text"
+            placeholder="Enter your name..."
+            maxLength={16}
+            value={playerName}
+            onChange={(e) => setPlayerName(e.target.value)}
+            className="w-full bg-black/50 border-2 border-gray-700 text-white px-4 py-3 text-center text-lg focus:outline-none focus:border-cyan-500 placeholder-gray-600"
+          />
+          <button
+            onClick={() => handleJoinGame(pendingJoin.gameConfigPda, skin, playerName, pendingJoin.worldPda, pendingJoin.gameEntityPda)}
+            disabled={!publicKey || playerName.length === 0 || loading}
+            className="w-full py-4 bg-cyan-700 hover:bg-cyan-600 disabled:bg-gray-800 disabled:text-gray-600 border-2 border-cyan-900 disabled:border-gray-700 text-white text-xl transition"
+          >
+            JOIN GAME
+          </button>
+          <button
+            onClick={() => { setPendingJoin(null); window.history.replaceState({}, "", "/"); }}
+            className="text-sm text-gray-500 hover:text-gray-300 transition"
+          >
+            go back to lobby
+          </button>
+        </div>
+        {loading && (
+          <div className="fixed inset-0 z-50 bg-black/80 flex flex-col items-center justify-center gap-4 px-4">
+            <div className="text-3xl text-yellow-400 animate-pulse">Joining game...</div>
+            <div className="w-full max-w-lg bg-black/60 border border-gray-700 p-4 max-h-[60vh] overflow-y-auto flex flex-col gap-1">
+              {log.map((l, i) => (
+                <div key={i} className={l.startsWith("---") ? "text-yellow-400 text-sm mt-2" : l.startsWith("Error") ? "text-red-400 text-sm" : "text-gray-400 text-xs"}>
+                  {l}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   if (screen === "menu") {
     return (

@@ -12,10 +12,9 @@ interface Props {
   erConnection?: Connection | null;
   onCreateGame: (skin: number, name: string) => void;
   onJoinGame: (gameId: string, skin: number, name: string) => void;
-  onSpectateGame: (gameConfigPda: string) => void;
 }
 
-export default function MainMenu({ price, connection, erConnection, onCreateGame, onJoinGame, onSpectateGame }: Props) {
+export default function MainMenu({ price, connection, erConnection, onCreateGame, onJoinGame }: Props) {
   const [playerName, setPlayerName] = useState("");
   const [selectedSkin, setSelectedSkin] = useState(1);
   const [games, setGames] = useState<GameListing[]>([]);
@@ -171,12 +170,7 @@ export default function MainMenu({ price, connection, erConnection, onCreateGame
                         </button>
                       </>
                     ) : (
-                      <button
-                        onClick={() => onSpectateGame(game.pubkey)}
-                        className="px-3 py-1 bg-cyan-700 hover:bg-cyan-600 border border-cyan-900 text-white text-xs transition"
-                      >
-                        SPECTATE
-                      </button>
+                      <span className="text-orange-400 text-xs">IN GAME</span>
                     )}
                   </div>
                 </div>

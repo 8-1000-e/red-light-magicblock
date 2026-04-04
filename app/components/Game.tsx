@@ -8,6 +8,7 @@ import {
   GAME_CONFIG_COMPONENT,
   PLAYER_STATE_COMPONENT,
   PLAYER_REGISTRY_COMPONENT,
+  LEADERBOARD_COMPONENT,
 } from "../lib/program-ids";
 import Image from "next/image";
 
@@ -87,6 +88,18 @@ function parsePlayerRegistry(data: Buffer) {
   return { count, playerStates };
 }
 
+function parseLeaderboard(data: Buffer): { entries: string[]; count: number } | null {
+  // disc(8) + entries(10 * 32 = 320) + count(1) + bolt_metadata(32)
+  if (data.length < 329) return null;
+  const count = data.readUInt8(328);
+  const entries: string[] = [];
+  for (let i = 0; i < count && i < 10; i++) {
+    const pubkeyBytes = data.slice(8 + i * 32, 8 + i * 32 + 32);
+    entries.push(new PublicKey(pubkeyBytes).toBase58());
+  }
+  return { entries, count };
+}
+
 function parseGameConfig(data: Buffer) {
   if (data.length < 51) return null;
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
@@ -108,8 +121,12 @@ export default function Game({
   // In normal mode, derive PDAs from entity. In spectate mode, use direct PDA.
   const resolvedGameConfigPda = gameConfigPdaProp
     || (gameEntityPda ? FindComponentPda({ componentId: GAME_CONFIG_COMPONENT, entity: gameEntityPda }) : null);
-  const resolvedRegistryPda = gameEntityPda
-    ? FindComponentPda({ componentId: PLAYER_REGISTRY_COMPONENT, entity: gameEntityPda })
+  const validGameEntity = gameEntityPda && gameEntityPda.toBase58() !== PublicKey.default.toBase58() ? gameEntityPda : null;
+  const resolvedRegistryPda = validGameEntity
+    ? FindComponentPda({ componentId: PLAYER_REGISTRY_COMPONENT, entity: validGameEntity })
+    : null;
+  const resolvedLeaderboardPda = validGameEntity
+    ? FindComponentPda({ componentId: LEADERBOARD_COMPONENT, entity: validGameEntity })
     : null;
   const fieldRef = useRef<HTMLDivElement>(null);
   const [fieldW, setFieldW] = useState(800);
@@ -144,6 +161,7 @@ export default function Game({
   const [shareCopied, setShareCopied] = useState(false);
   const [lastPrice, setLastPrice] = useState<number | null>(null);
   const [otherPlayers, setOtherPlayers] = useState<OtherPlayer[]>([]);
+  const [leaderboard, setLeaderboard] = useState<string[]>([]); // pubkeys in finish order
   const gameStartRef = useRef(0);
   const movePendingRef = useRef(false);
   const otherSubsRef = useRef<number[]>([]);
@@ -214,7 +232,8 @@ export default function Game({
           if (!ps) continue;
           const statePda = playerStatePdas[i];
           players.push({ name: ps.name || "???", skin: ps.skin || 1, pubkey: ps.authority.toBase58() });
-          if (playerEntityPda && statePda.toBase58() !== FindComponentPda({ componentId: PLAYER_STATE_COMPONENT, entity: playerEntityPda }).toBase58()) {
+          const myStatePda = playerEntityPda ? FindComponentPda({ componentId: PLAYER_STATE_COMPONENT, entity: playerEntityPda }).toBase58() : null;
+          if (!myStatePda || statePda.toBase58() !== myStatePda) {
             others.push({
               name: ps.name || "???",
               skin: ps.skin || 1,
@@ -227,7 +246,7 @@ export default function Game({
             });
           }
         }
-      } catch { /* ER might be rate-limited */ }
+      } catch (err) { console.warn("processRegistry fetch failed:", err); }
       setLobbyPlayers(players);
       setOtherPlayers(others);
 
@@ -238,8 +257,9 @@ export default function Game({
       otherSubsRef.current = [];
 
       // Subscribe to each other player's state for live Y updates
+      const myStatePda = playerEntityPda ? FindComponentPda({ componentId: PLAYER_STATE_COMPONENT, entity: playerEntityPda }).toBase58() : null;
       for (const statePda of playerStatePdas) {
-        if (playerEntityPda && statePda.toBase58() === FindComponentPda({ componentId: PLAYER_STATE_COMPONENT, entity: playerEntityPda }).toBase58()) continue;
+        if (myStatePda && statePda.toBase58() === myStatePda) continue;
         const subId = erConnection.onAccountChange(statePda, (info) => {
           const ps = parsePlayerState(info.data as Buffer);
           if (!ps) return;
@@ -268,6 +288,23 @@ export default function Game({
       otherSubsRef.current = [];
     };
   }, [erConnection, resolvedRegistryPda, playerEntityPda, fieldW]);
+
+  // ─── Subscribe to Leaderboard on ER ───
+  useEffect(() => {
+    if (!erConnection || !resolvedLeaderboardPda) return;
+    const pda = resolvedLeaderboardPda;
+
+    const handleLeaderboard = (data: Buffer) => {
+      const lb = parseLeaderboard(data);
+      if (lb) setLeaderboard(lb.entries);
+    };
+
+    erConnection.getAccountInfo(pda).then(info => {
+      if (info) handleLeaderboard(info.data as Buffer);
+    }).catch(() => {});
+    const subId = erConnection.onAccountChange(pda, (info) => handleLeaderboard(info.data as Buffer));
+    return () => { erConnection.removeAccountChangeListener(subId); };
+  }, [erConnection, resolvedLeaderboardPda]);
 
   // ─── Lobby countdown from on-chain lobby_end ───
   useEffect(() => {
@@ -348,6 +385,12 @@ export default function Game({
   }, [gameStatus, keysDown, playerAlive, playerFinished, session, worldPda, gameEntityPda, playerEntityPda, erConnection]);
 
   const elapsed = gameStatus !== "lobby" ? ((Date.now() - gameStartRef.current) / 1000).toFixed(1) : "0";
+
+  // Resolve leaderboard pubkeys to player names
+  const leaderboardNames = leaderboard.map((pubkey, i) => {
+    const player = lobbyPlayers.find(p => p.pubkey === pubkey);
+    return { rank: i + 1, name: player?.name || pubkey.slice(0, 6) + "...", pubkey };
+  });
 
   return (
     <div className="flex flex-col items-center gap-4 w-full h-full flex-1">
@@ -453,8 +496,8 @@ export default function Game({
           );
         })}
 
-        {/* My player sprite */}
-        {(() => {
+        {/* My player sprite (hidden in spectate) */}
+        {!isSpectate && (() =>{
           let sprite = `/props_${skin}_front.png`;
           if (!playerAlive) sprite = `/props_${skin}_dead.png`;
           else if (playerFinished) sprite = `/props_${skin}_front.png`;
@@ -531,7 +574,7 @@ export default function Game({
               {/* Share button */}
               <button
                 onClick={() => {
-                  const url = `${window.location.origin}?world=${worldPda?.toBase58()}&game=${gameEntityPda?.toBase58()}`;
+                  const url = `${window.location.origin}?join=${resolvedGameConfigPda?.toBase58()}&world=${worldPda?.toBase58()}&entity=${gameEntityPda?.toBase58()}`;
                   navigator.clipboard.writeText(url);
                   setShareCopied(true);
                   setTimeout(() => setShareCopied(false), 2000);
@@ -557,14 +600,46 @@ export default function Game({
           </div>
         )}
 
-        {/* Game over text */}
+        {/* Leaderboard — small during playing, large at end */}
+        {gameStatus === "playing" && leaderboardNames.length > 0 && (
+          <div className="absolute bottom-14 left-3 z-40 bg-black/60 border border-gray-700 px-3 py-2 min-w-[140px]">
+            <div className="text-xs text-yellow-400 font-bold mb-1">LEADERBOARD</div>
+            {leaderboardNames.map((e) => (
+              <div key={e.pubkey} className="flex items-center gap-2 text-xs text-white/80">
+                <span className="text-yellow-400">#{e.rank}</span>
+                <span>{e.name}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Game over overlay */}
         {gameStatus === "ended" && (
-          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 z-40 text-center">
-            <div className={`text-5xl font-bold drop-shadow-lg ${playerFinished ? "text-green-400" : "text-red-500"}`}>
-              {playerFinished ? "YOU WIN!" : "ELIMINATED"}
-            </div>
-            <div className="text-white/70 text-sm mt-2 drop-shadow">
-              {elapsed}s
+          <div className="absolute inset-0 z-40 flex flex-col items-center justify-center">
+            <div className="absolute inset-0 bg-black/60" />
+            <div className="relative z-10 flex flex-col items-center gap-4">
+              <div className={`text-5xl font-bold drop-shadow-lg ${playerFinished ? "text-green-400" : "text-red-500"}`}>
+                {playerFinished ? "YOU WIN!" : "ELIMINATED"}
+              </div>
+              <div className="text-white/70 text-sm drop-shadow">
+                {elapsed}s
+              </div>
+
+              {leaderboardNames.length > 0 && (
+                <div className="bg-black/70 border border-yellow-500/50 px-6 py-4 mt-2 min-w-[250px]">
+                  <div className="text-lg text-yellow-400 font-bold mb-3 text-center">LEADERBOARD</div>
+                  {leaderboardNames.map((e) => {
+                    const isMe = e.pubkey === session?.signer?.publicKey?.toBase58();
+                    return (
+                      <div key={e.pubkey} className={`flex items-center gap-3 py-1 ${isMe ? "text-fuchsia-400" : "text-white"}`}>
+                        <span className="text-yellow-400 text-lg w-8">#{e.rank}</span>
+                        <span className="text-lg">{e.name}</span>
+                        {isMe && <span className="text-xs text-fuchsia-300">(you)</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}

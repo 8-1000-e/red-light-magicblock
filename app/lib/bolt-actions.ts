@@ -46,8 +46,8 @@ export async function resolveGameEntity(
   const registryInfo = await connection.getAccountInfo(registryPda);
   const worldCount = registryInfo ? Number(registryInfo.data.readBigUInt64LE(8)) : 100;
 
-  // Search last 100 worlds, entity 0 (game entity is always first)
-  const searchFrom = Math.max(0, worldCount - 100);
+  // Search last 500 worlds, entity 0 (game entity is always first)
+  const searchFrom = Math.max(0, worldCount - 500);
   for (let w = worldCount; w >= searchFrom; w--) {
     const ePda = FindEntityPda({ worldId: new BoltBN(w), entityId: new BoltBN(0) });
     const cPda = FindComponentPda({ componentId: GAME_CONFIG_COMPONENT, entity: ePda });
