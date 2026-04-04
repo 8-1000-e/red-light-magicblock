@@ -11,7 +11,7 @@ import Game from "./components/Game";
 import { createAndJoinGame, joinExistingGame, resolveGameEntity, GameState } from "./lib/bolt-actions";
 import { Session } from "@magicblock-labs/bolt-sdk";
 
-const ER_RPC = "http://localhost:7799";
+const ER_RPC = process.env.NEXT_PUBLIC_ER_RPC || "http://localhost:7799";
 
 function WalletMenu({ address, onDisconnect }: { address: string; onDisconnect: () => void }) {
   const [open, setOpen] = useState(false);

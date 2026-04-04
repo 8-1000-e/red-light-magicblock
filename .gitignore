@@ -5,3 +5,5 @@ target/
 magicblock-test-storage/
 .surfpool/
 crates/
+.env
+.env.local

@@ -62,17 +62,21 @@ export async function fetchAllGames(
 
     // 2. If ER connection available, refresh live data from ER
     if (erConnection) {
-      const pdas = games.map(g => new PublicKey(g.pubkey));
-      const erAccounts = await erConnection.getMultipleAccountsInfo(pdas);
-      for (let i = 0; i < games.length; i++) {
-        const erData = erAccounts[i]?.data;
-        if (!erData) continue;
-        const erParsed = parseGameConfigData(erData as Buffer);
-        if (!erParsed) continue;
-        // Override with ER state (live data)
-        games[i].status = erParsed.status;
-        games[i].activePlayers = erParsed.activePlayers;
-        games[i].light = erParsed.light;
+      try {
+        const pdas = games.map(g => new PublicKey(g.pubkey));
+        const erAccounts = await erConnection.getMultipleAccountsInfo(pdas);
+        for (let i = 0; i < games.length; i++) {
+          const erData = erAccounts[i]?.data;
+          if (!erData) continue;
+          const erParsed = parseGameConfigData(erData as Buffer);
+          if (!erParsed) continue;
+          // Override with ER state (live data)
+          games[i].status = erParsed.status;
+          games[i].activePlayers = erParsed.activePlayers;
+          games[i].light = erParsed.light;
+        }
+      } catch (err) {
+        console.warn("ER fetch failed, using L1 data:", err);
       }
     }
 

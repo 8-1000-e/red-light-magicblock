@@ -27,7 +27,7 @@ import {
   CHECK_PRICE_SYSTEM,
 } from "./program-ids";
 
-let ER_VALIDATOR = new PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev");
+let ER_VALIDATOR = new PublicKey("MEUGGrYPxKk17hCr7wpT6s8dtNokZj5U2L57vjYMS8e");
 
 export function setErValidator(pubkey: string) {
   ER_VALIDATOR = new PublicKey(pubkey);
