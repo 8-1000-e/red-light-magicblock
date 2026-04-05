@@ -11,6 +11,7 @@ import {
   LEADERBOARD_COMPONENT,
 } from "../lib/program-ids";
 import Image from "next/image";
+import PriceChart from "./PriceChart";
 
 const PLAYER_SIZE = 65;
 const DOLL_SIZE = 110;
@@ -453,57 +454,38 @@ export default function Game({
   });
 
   return (
-    <div className="flex flex-col items-center gap-4 w-full h-full flex-1">
-      {/* HUD — pixel card top right */}
-      <div className="absolute top-1 right-1 md:top-2 md:right-2 z-50 p-2 md:p-4 flex flex-col gap-0 items-center justify-center" style={{ imageRendering: "pixelated", width: fieldW < 600 ? 150 : 180, height: fieldW < 600 ? 160 : 190, backgroundImage: "url('/CARD.png')", backgroundSize: "100% 100%", backgroundRepeat: "no-repeat" }}>
-        <div className="text-gray-600 text-xs md:text-sm">SOL/USD</div>
-
-        <div className="flex items-baseline gap-1">
-          <span className="text-blue-700 text-xs md:text-lg">last:</span>
-          <span className="text-gray-800 text-sm md:text-xl">{lastPrice ? lastPrice.toFixed(4) : "..."}</span>
-        </div>
-
-        <div className={`text-lg md:text-2xl ${light === "red" ? "text-red-600" : "text-green-600"}`}>
-          {light === "red" ? "▼ RED" : "▲ GREEN"}
-        </div>
-
-        <div className="flex items-baseline gap-1">
-          <span className="text-rose-600 text-xs md:text-lg">now:</span>
-          <span className="text-gray-800 text-sm md:text-xl">{price?.toFixed(4) ?? "..."}</span>
-        </div>
-
-        {gameStatus === "playing" && !isSpectate && (
-          <div className="flex items-baseline gap-1 mt-1">
-            <span className="text-gray-500 text-[10px]">Y:</span>
-            <span className="text-gray-800 text-sm">{onChainY}/200</span>
-          </div>
-        )}
-
-        {(gameStatus === "ended" || isSpectate) && onBack && (
-          <button
-            onClick={onBack}
-            className="mt-1 px-3 py-1 md:mt-2 md:px-4 md:py-2 bg-gray-700 hover:bg-gray-600 border-2 border-gray-500 text-white text-sm md:text-sm transition"
-          >
-            {isSpectate ? "GO BACK" : "MENU"}
-          </button>
-        )}
+    <div className="flex w-full h-full flex-1">
+      {/* LEFT — Price chart (hidden on mobile) */}
+      <div className="hidden md:block md:w-[60%] h-full">
+        <PriceChart price={price} history={history} lastOnChainPrice={lastPrice} light={light} />
       </div>
 
-      {/* Game countdown — below HUD card */}
-      {gameStatus === "playing" && !isSpectate && (
-        <div className="absolute z-50 flex flex-col items-center" style={{ top: fieldW < 600 ? 170 : 200, right: fieldW < 600 ? 10 : 16 }}>
-          <div className={`text-4xl md:text-5xl font-bold drop-shadow-lg ${gameCountdown <= 30 ? "text-red-500" : "text-yellow-400"}`} style={{
-            textShadow: gameCountdown <= 30
-              ? "0 0 20px rgba(239,68,68,0.5), 0 4px 0 #7f1d1d"
-              : "0 0 20px rgba(250,204,21,0.5), 0 4px 0 #b45309"
-          }}>
-            {Math.floor(gameCountdown / 60)}:{(gameCountdown % 60).toString().padStart(2, "0")}
+      {/* RIGHT — Game field */}
+      <div className="w-full md:w-[40%] h-full relative flex flex-col">
+        {/* Game countdown */}
+        {gameStatus === "playing" && !isSpectate && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-50">
+            <div className={`text-3xl md:text-4xl font-bold drop-shadow-lg ${gameCountdown <= 30 ? "text-red-500" : "text-yellow-400"}`} style={{
+              textShadow: gameCountdown <= 30
+                ? "0 0 20px rgba(239,68,68,0.5), 0 4px 0 #7f1d1d"
+                : "0 0 20px rgba(250,204,21,0.5), 0 4px 0 #b45309"
+            }}>
+              {Math.floor(gameCountdown / 60)}:{(gameCountdown % 60).toString().padStart(2, "0")}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Game field — fullscreen */}
-      <div ref={fieldRef} className="relative overflow-hidden flex-1 w-full">
+        {/* Menu button */}
+        {(gameStatus === "ended") && onBack && (
+          <div className="absolute top-2 right-2 z-50">
+            <button onClick={onBack} className="px-3 py-1 bg-gray-700 hover:bg-gray-600 border-2 border-gray-500 text-white text-sm transition">
+              MENU
+            </button>
+          </div>
+        )}
+
+        {/* Game field */}
+        <div ref={fieldRef} className="relative overflow-hidden flex-1 w-full">
         <Image src="/BACKGROUND.png" alt="field" fill className="object-fill" priority />
 
         {/* Finish line (2/9) — checkerboard pattern */}
@@ -739,8 +721,8 @@ export default function Game({
             </div>
           </div>
         )}
-      </div>
-
+        </div>{/* close game field */}
+      </div>{/* close right panel */}
     </div>
   );
 }
