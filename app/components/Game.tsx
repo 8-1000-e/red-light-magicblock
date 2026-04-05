@@ -200,7 +200,7 @@ export default function Game({
 
     erConnection.getAccountInfo(pda).then(info => {
       if (info) handleConfig(info.data as Buffer);
-    });
+    }).catch(() => {});
     const subId = erConnection.onAccountChange(pda, (info) => handleConfig(info.data as Buffer));
     return () => { erConnection.removeAccountChangeListener(subId); };
   }, [erConnection, resolvedGameConfigPda]);
@@ -227,7 +227,13 @@ export default function Game({
     const pda = resolvedRegistryPda;
     const myAuthority = session?.signer?.publicKey?.toBase58() || playerEntityPda?.toBase58() || "";
 
+    const lastRegistryRef = { pdas: "" };
     const processRegistry = async (playerStatePdas: PublicKey[]) => {
+      // Skip if same PDAs as last time (avoid re-fetching on every registry update)
+      const key = playerStatePdas.map(p => p.toBase58()).join(",");
+      if (key === lastRegistryRef.pdas) return;
+      lastRegistryRef.pdas = key;
+
       // Batch fetch all player states in ONE call instead of N sequential calls
       const players: LobbyPlayer[] = [];
       const others: OtherPlayer[] = [];
@@ -285,7 +291,7 @@ export default function Game({
       if (!info) return;
       const reg = parsePlayerRegistry(info.data as Buffer);
       if (reg && reg.count > 0) processRegistry(reg.playerStates);
-    });
+    }).catch(() => {});
     const subId = erConnection.onAccountChange(pda, (accountInfo) => {
       const reg = parsePlayerRegistry(accountInfo.data as Buffer);
       if (reg && reg.count > 0) processRegistry(reg.playerStates);
@@ -295,7 +301,7 @@ export default function Game({
       for (const s of otherSubsRef.current) erConnection.removeAccountChangeListener(s);
       otherSubsRef.current = [];
     };
-  }, [erConnection, resolvedRegistryPda, playerEntityPda, fieldW]);
+  }, [erConnection, resolvedRegistryPda, playerEntityPda]);
 
   // ─── Subscribe to Leaderboard on ER ───
   useEffect(() => {
