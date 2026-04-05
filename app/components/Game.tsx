@@ -362,15 +362,16 @@ export default function Game({
     return () => clearInterval(id);
   }, [gameStatus]);
 
-  // ─── Auto-send endGame when countdown reaches 0 (disabled for now) ───
-  // useEffect(() => {
-  //   if (gameStatus !== "playing" || gameCountdown > 0 || endGameSent) return;
-  //   if (!session || !worldPda || !gameEntityPda || !erConnection) return;
-  //   setEndGameSent(true);
-  //   sendEndGame(erConnection, session, worldPda, gameEntityPda)
-  //     .then(() => { console.log("end-game confirmed!"); setGameStatus("ended"); })
-  //     .catch((e) => { console.error("end-game failed:", e); setGameStatus("ended"); });
-  // }, [gameStatus, gameCountdown, endGameSent, session, worldPda, gameEntityPda, erConnection]);
+  // ─── Auto-send endGame when countdown reaches 0 ───
+  useEffect(() => {
+    if (gameStatus !== "playing" || gameCountdown > 0 || endGameSent) return;
+    if (!session || !worldPda || !gameEntityPda || !erConnection) return;
+    setEndGameSent(true);
+    console.log("Time's up — sending end-game...");
+    sendEndGame(erConnection, session, worldPda, gameEntityPda)
+      .then(() => { console.log("end-game confirmed!"); setGameStatus("ended"); })
+      .catch((e) => { console.error("end-game failed:", e); setGameStatus("ended"); });
+  }, [gameStatus, gameCountdown, endGameSent, session, worldPda, gameEntityPda, erConnection]);
 
   // ─── checkPrice interval (every 10s during playing) ───
   useEffect(() => {
