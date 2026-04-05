@@ -2,7 +2,7 @@ use bolt_lang::*;
 use game_config::GameConfig;
 use shared::{GameError, read_pyth_price};
 
-declare_id!("2zKVpP5ovwYVfcTtEj1n4sRWdBoRcDKVk8AbzEAo8B8k");
+declare_id!("AUmgrJaCwgJ9QBB3oJGdraA9MswXzjuAgrLTuxA3dYSh");
 
 #[system]
 pub mod start_game {
@@ -18,7 +18,8 @@ pub mod start_game {
 
         ctx.accounts.game_config.status = 1; // Playing
         ctx.accounts.game_config.light = 0; // Green
-        ctx.accounts.game_config.last_price = read_pyth_price(&ctx.remaining_accounts[0])?;
+        let pyth_idx = ctx.remaining_accounts.len() - 1;
+        ctx.accounts.game_config.last_price = read_pyth_price(&ctx.remaining_accounts[pyth_idx])?;
         ctx.accounts.game_config.last_check_time = Clock::get()?.unix_timestamp;
 
         Ok(ctx.accounts)

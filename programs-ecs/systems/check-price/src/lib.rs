@@ -2,7 +2,7 @@ use bolt_lang::*;
 use game_config::GameConfig;
 use shared::{GameError, read_pyth_price};
 
-declare_id!("14aiGdhHAwHjMCJb8F4agsa4NNWdyZCBQjvBcX3Fib6K");
+declare_id!("C79XfcHutZS87nW1WB52pjtEhdioNMTxxc1Uz5QDTg9E");
 
 const CHECK_COOLDOWN: i64 = 3; // check every 3 seconds
 const RED_DURATION: i64 = 2;   // red light lasts 2 seconds
@@ -18,8 +18,14 @@ pub mod check_price {
             return Ok(ctx.accounts);
         }
 
-        let price = read_pyth_price(&ctx.remaining_accounts[0])?;
+        // remaining_accounts[0] = GameConfig component program (added by BOLT)
+        // remaining_accounts[1] = Pyth PDA (our extraAccount)
+        let pyth_idx = ctx.remaining_accounts.len() - 1;
+        msg!("check-price: pyth_account={} (idx={})", ctx.remaining_accounts[pyth_idx].key, pyth_idx);
+        let price = read_pyth_price(&ctx.remaining_accounts[pyth_idx])?;
         let last_price = ctx.accounts.game_config.last_price;
+
+        msg!("check-price: price={} last_price={}", price, last_price);
 
         // Any drop = red light
         if last_price > 0 && price < last_price  && ctx.accounts.game_config.light == 0 {

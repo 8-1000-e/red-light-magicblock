@@ -14,10 +14,10 @@ import Image from "next/image";
 
 const PLAYER_SIZE = 65;
 const DOLL_SIZE = 110;
-const CHECK_PRICE_INTERVAL_MS = 10_000;
+const CHECK_PRICE_INTERVAL_MS = 3_000;
 const MOVE_INTERVAL_MS = 80;
 
-const DEFAULT_PYTH_PDA = new PublicKey("7UVimffxr9ow1uXYxsr4LHAcV58mLzhmwaeKvJ1pjLiE");
+const DEFAULT_PYTH_PDA = new PublicKey("ENYwebBThHzmzwPLAQvCucUTsjyfBSZdD9ViXksS4jPu");
 
 interface LobbyPlayer {
   name: string;
@@ -34,6 +34,7 @@ interface OtherPlayer {
   finished: boolean;
   xPos: number; // fixed random X position on screen
   statePda: string;
+  lastMoveTime: number;
 }
 
 // Deterministic "random" X from pubkey string
@@ -108,6 +109,8 @@ function parseGameConfig(data: Buffer) {
     activePlayers: data.readUInt8(9),
     light: data.readUInt8(10),
     lastPrice: Number(view.getBigUint64(11, true)),
+    lastCheckTime: Number(view.getBigInt64(19, true)),
+    startTime: Number(view.getBigInt64(35, true)),
     lobbyEnd: Number(view.getBigInt64(43, true)),
   };
 }
@@ -168,7 +171,7 @@ export default function Game({
   const [lobbyPlayers, setLobbyPlayers] = useState<LobbyPlayer[]>([]);
   const [lobbyCountdown, setLobbyCountdown] = useState(60);
   const [lobbyEnd, setLobbyEnd] = useState(0);
-  const lobbyReceivedRef = useRef<{ chainTime: number; localTime: number } | null>(null);
+  const chainDriftRef = useRef<number | null>(null); // chainTime - localTime
   const [startGameSent, setStartGameSent] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
   const [lastPrice, setLastPrice] = useState<number | null>(null);
@@ -199,10 +202,10 @@ export default function Game({
     const handleConfig = (data: Buffer) => {
       const cfg = parseGameConfig(data);
       if (!cfg) return;
-      // Calculate chain-to-local time drift on first config receive
-      if (cfg.lobbyEnd > 0 && !lobbyReceivedRef.current) {
-        const chainNow = cfg.lobbyEnd - 60; // startTime = lobbyEnd - 60s
-        lobbyReceivedRef.current = { chainTime: chainNow, localTime: Math.floor(Date.now() / 1000) };
+      // Calculate chain-to-local drift: use the latest chain timestamp we have
+      const chainNow = cfg.lastCheckTime > 0 ? cfg.lastCheckTime : cfg.startTime;
+      if (chainNow > 0 && chainDriftRef.current === null) {
+        chainDriftRef.current = chainNow - Math.floor(Date.now() / 1000);
       }
       setLobbyEnd(cfg.lobbyEnd);
       setLight(cfg.light === 1 ? "red" : "green");
@@ -244,6 +247,7 @@ export default function Game({
               y: ps.y, prevY: ps.y, alive: ps.alive, finished: ps.finished,
               xPos: hashToX(statePda.toBase58(), fieldW),
               statePda: statePda.toBase58(),
+              lastMoveTime: 0,
             });
           }
         }
@@ -264,7 +268,7 @@ export default function Game({
           if (!ps) return;
           setOtherPlayers(prev => prev.map(op =>
             op.statePda === statePda.toBase58()
-              ? { ...op, prevY: op.y, y: ps.y, alive: ps.alive, finished: ps.finished }
+              ? { ...op, prevY: op.y, y: ps.y, alive: ps.alive, finished: ps.finished, lastMoveTime: Date.now() }
               : op
           ));
         });
@@ -325,15 +329,12 @@ export default function Game({
     };
   }, [erConnection, resolvedGameConfigPda, playerEntityPda, resolvedRegistryPda, resolvedLeaderboardPda]);
 
-  // ─── Lobby countdown (drift-corrected) ───
+  // ─── Lobby countdown ───
   useEffect(() => {
     if (gameStatus !== "lobby" || lobbyEnd === 0) return;
-    const drift = lobbyReceivedRef.current
-      ? lobbyReceivedRef.current.chainTime - lobbyReceivedRef.current.localTime
-      : 0;
     const id = setInterval(() => {
-      const chainNow = Math.floor(Date.now() / 1000) + drift;
-      setLobbyCountdown(Math.max(0, lobbyEnd - chainNow));
+      const now = Math.floor(Date.now() / 1000);
+      setLobbyCountdown(Math.max(0, lobbyEnd - now));
     }, 200);
     return () => clearInterval(id);
   }, [gameStatus, lobbyEnd]);
@@ -360,27 +361,29 @@ export default function Game({
     return () => clearInterval(id);
   }, [gameStatus]);
 
-  // ─── Auto-send endGame when countdown reaches 0 ───
-  useEffect(() => {
-    if (gameStatus !== "playing" || gameCountdown > 0 || endGameSent) return;
-    if (!session || !worldPda || !gameEntityPda || !erConnection) return;
+  // ─── Auto-send endGame when countdown reaches 0 (disabled for now) ───
+  // useEffect(() => {
+  //   if (gameStatus !== "playing" || gameCountdown > 0 || endGameSent) return;
+  //   if (!session || !worldPda || !gameEntityPda || !erConnection) return;
+  //   setEndGameSent(true);
+  //   sendEndGame(erConnection, session, worldPda, gameEntityPda)
+  //     .then(() => { console.log("end-game confirmed!"); setGameStatus("ended"); })
+  //     .catch((e) => { console.error("end-game failed:", e); setGameStatus("ended"); });
+  // }, [gameStatus, gameCountdown, endGameSent, session, worldPda, gameEntityPda, erConnection]);
 
-    setEndGameSent(true);
-    console.log("Time's up — sending end-game...");
-    sendEndGame(erConnection, session, worldPda, gameEntityPda)
-      .then(() => { console.log("end-game confirmed!"); setGameStatus("ended"); })
-      .catch((e) => { console.error("end-game failed:", e); setGameStatus("ended"); });
-  }, [gameStatus, gameCountdown, endGameSent, session, worldPda, gameEntityPda, erConnection]);
-
-  // ─── checkPrice interval (every 3s during playing) ───
+  // ─── checkPrice interval (every 10s during playing) ───
   useEffect(() => {
     if (gameStatus !== "playing") return;
     if (!session || !worldPda || !gameEntityPda || !erConnection) return;
 
-    const id = setInterval(() => {
+    const doCheck = () => {
       sendCheckPrice(erConnection, session, worldPda, gameEntityPda, pythPricePda)
-        .catch((e) => console.warn("checkPrice:", e.message));
-    }, CHECK_PRICE_INTERVAL_MS);
+        .then(() => console.log("checkPrice OK"))
+        .catch((e) => console.warn("checkPrice failed:", e.message));
+    };
+
+    doCheck(); // immediate first check
+    const id = setInterval(doCheck, CHECK_PRICE_INTERVAL_MS);
     return () => clearInterval(id);
   }, [gameStatus, session, worldPda, gameEntityPda, erConnection, pythPricePda]);
 
@@ -541,7 +544,7 @@ export default function Game({
         {/* Other players */}
         {gameStatus === "playing" && otherPlayers.map((op) => {
           const opScreenY = START_LINE_Y - (op.y / 200) * (START_LINE_Y - FINISH_LINE_Y);
-          const opMoving = op.y !== op.prevY;
+          const opMoving = Date.now() - op.lastMoveTime < 300;
           const opSprite = !op.alive ? `/props_${op.skin}_dead.png` : opMoving ? `/props_${op.skin}_back.png` : `/props_${op.skin}_front.png`;
           const opHop = (opMoving && op.alive) ? (Math.floor(Date.now() / 200) % 2 === 0 ? -4 : 0) : 0;
           return (

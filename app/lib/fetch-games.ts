@@ -50,17 +50,21 @@ export async function fetchAllGames(
   erConnection?: Connection | null,
 ): Promise<GameListing[]> {
   try {
-    // 1. Get all GameConfig PDAs from L1
-    const accounts = await l1Connection.getProgramAccounts(GAME_CONFIG_COMPONENT, {
+    // Fetch from ER first (delegated games live there), fallback to L1
+    const conn = erConnection || l1Connection;
+    const accounts = await conn.getProgramAccounts(GAME_CONFIG_COMPONENT, {
       commitment: "confirmed",
+      filters: [{ dataSize: 83 }],
     });
 
     const games: GameListing[] = [];
+    console.log(`fetchAllGames: found ${accounts.length} GameConfig accounts on L1`);
 
     for (const { pubkey, account } of accounts) {
       const parsed = parseGameConfigData(account.data);
-      if (!parsed) continue;
+      if (!parsed) { console.log(`  skip ${pubkey.toBase58().slice(0,8)}: parse failed (len=${account.data.length})`); continue; }
       parsed.pubkey = pubkey.toBase58();
+      console.log(`  game ${pubkey.toBase58().slice(0,8)}: status=${parsed.status} players=${parsed.activePlayers} lobbyEnd=${parsed.lobbyEnd} startTime=${parsed.startTime}`);
       games.push(parsed);
     }
 
