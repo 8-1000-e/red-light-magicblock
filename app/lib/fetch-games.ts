@@ -64,29 +64,8 @@ export async function fetchAllGames(
       games.push(parsed);
     }
 
-    // 2. If ER connection available, refresh live data from ER (with backoff)
-    if (erConnection && games.length > 0 && Date.now() > erBackoffUntil) {
-      try {
-        const pdas = games.map(g => new PublicKey(g.pubkey));
-        const erAccounts = await erConnection.getMultipleAccountsInfo(pdas);
-        for (let i = 0; i < games.length; i++) {
-          const erData = erAccounts[i]?.data;
-          if (!erData) continue;
-          const erParsed = parseGameConfigData(erData as Buffer);
-          if (!erParsed) continue;
-          // Override with ER state (live data)
-          games[i].status = erParsed.status;
-          games[i].activePlayers = erParsed.activePlayers;
-          games[i].light = erParsed.light;
-        }
-        // Success — reset backoff
-        erBackoffMs = 5000;
-      } catch (err) {
-        console.warn("ER fetch failed, backing off:", err);
-        erBackoffUntil = Date.now() + erBackoffMs;
-        erBackoffMs = Math.min(erBackoffMs * 2, 60000); // max 60s backoff
-      }
-    }
+    // ER refresh removed — L1 data only for game list
+    // (ER rate limit is too strict for page-load calls)
 
     // 3. Filter
     const maxLobbyEnd = Math.max(...games.map(g => g.lobbyEnd).filter(t => t > 0), 0);

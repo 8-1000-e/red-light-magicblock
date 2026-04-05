@@ -42,18 +42,8 @@ export function useSolPrice() {
     const conn = new Connection(ER_RPC, { wsEndpoint: ER_WSS, commitment: "confirmed" });
     connRef.current = conn;
 
-    // Initial fetch (best-effort — WS subscription is the real source)
-    conn.getAccountInfo(pda).then((info) => {
-      if (info) {
-        const p = parsePrice(info.data as Buffer);
-        if (p) {
-          setPrice(p);
-          setHistory([{ price: p, timestamp: Date.now() }]);
-        }
-      }
-    }).catch(() => {
-      // ER might be rate-limited; WS subscription will provide price
-    });
+    // No initial fetch — WS subscription provides the price
+    // (avoids burning ER rate limit on page load)
 
     // Subscribe
     const subId = conn.onAccountChange(pda, (accountInfo) => {
