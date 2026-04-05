@@ -28,7 +28,7 @@ import {
   END_GAME_SYSTEM,
 } from "./program-ids";
 
-let ER_VALIDATOR = new PublicKey("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57");
+let ER_VALIDATOR = new PublicKey("FnE6VJT5QNZdedZPnCoLsARgBwoE6DeJNjBs2H1gySXA");
 
 export function setErValidator(pubkey: string) {
   ER_VALIDATOR = new PublicKey(pubkey);
