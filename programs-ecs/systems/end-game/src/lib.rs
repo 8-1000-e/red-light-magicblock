@@ -2,7 +2,7 @@ use bolt_lang::*;
 use game_config::GameConfig;
 use shared::GameError;
 
-declare_id!("9xmJrU5Z7HqT5kaK8kAmHJyQ691PnYHH4bEL9NtEDEGx");
+declare_id!("D3Rnz7b9WTovkJzMn46N7cMDrRtkcCw44mRKGFCJZuQv");
 
 const GAME_DURATION: i64 = 150; // 2min30
 

@@ -1,6 +1,6 @@
 use bolt_lang::*;
 
-declare_id!("3pXqzoU9T4uQzVTv1gZJrPNe59qFKy2GP4353JK22Swu");
+declare_id!("BCHiAy9P55oJjVrLYQ3nyEBzxTDrBVvdDw2JHz3nAAKh");
 
 #[component(delegate)]
 pub struct PlayerState {
@@ -17,6 +17,8 @@ pub struct PlayerState {
     pub last_move_slot: u64,
     /// Skin number (1-based, matches props_X_front.png)
     pub skin: u8,
+    /// Timestamp when player can respawn (0 = not dead)
+    pub respawn_time: i64,
 }
 
 impl Default for PlayerState {
@@ -31,6 +33,7 @@ impl Default for PlayerState {
             name_len: 0,
             last_move_slot: 0,
             skin: 1,
+            respawn_time: 0,
             bolt_metadata: BoltMetadata::default(),
         }
     }

@@ -4,17 +4,29 @@ use player_state::PlayerState;
 use leaderboard::Leaderboard;
 use shared::GameError;
 
-declare_id!("B41Kov8d1moDABp8RdSTRauZUNpwuNwvc312erhWF7w1");
+declare_id!("k2G5xobAryNuPg2FkQd6pK5DQcfErUGskWS54qbC833");
 
 const FINISH_Y: u16 = 200;
 const MIN_SLOT_GAP: u64 = 1; // 1 slot minimum between moves (~50ms on ER)
+const RESPAWN_DELAY: i64 = 5; // 5 seconds to respawn
 
 #[system]
 pub mod move_player {
     pub fn execute(ctx: Context<Components>, _args: Vec<u8>) -> Result<Components> {
         require!(ctx.accounts.game_config.status == 1, GameError::GameNotPlaying);
-        require!(ctx.accounts.player_state.alive, GameError::PlayerDead);
         require!(!ctx.accounts.player_state.finished, GameError::PlayerFinished);
+
+        let now = Clock::get()?.unix_timestamp;
+
+        // Respawn check — if dead and respawn_time has passed, revive
+        if !ctx.accounts.player_state.alive {
+            if ctx.accounts.player_state.respawn_time > 0 && now >= ctx.accounts.player_state.respawn_time {
+                ctx.accounts.player_state.alive = true;
+                ctx.accounts.player_state.y = 0;
+                ctx.accounts.player_state.respawn_time = 0;
+            }
+            return Ok(ctx.accounts);
+        }
 
         // Anti speed hack — rate limit by slot
         let slot = Clock::get()?.slot;
@@ -23,13 +35,13 @@ pub mod move_player {
         }
         ctx.accounts.player_state.last_move_slot = slot;
 
-        let now = Clock::get()?.unix_timestamp;
         let is_red = ctx.accounts.game_config.light == 1
             && now < ctx.accounts.game_config.red_until;
 
         if is_red {
-            // Moved during red light → eliminated
+            // Moved during red light → dead, respawn in 5s
             ctx.accounts.player_state.alive = false;
+            ctx.accounts.player_state.respawn_time = now + RESPAWN_DELAY;
         } else {
             // Green light → advance by 1
             ctx.accounts.player_state.y = ctx.accounts.player_state.y.saturating_add(1);

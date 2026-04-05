@@ -825,6 +825,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "end-game"
+version = "0.2.4"
+dependencies = [
+ "bolt-lang",
+ "game-config",
+ "shared",
+]
+
+[[package]]
 name = "ephemeral-rollups-sdk"
 version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"

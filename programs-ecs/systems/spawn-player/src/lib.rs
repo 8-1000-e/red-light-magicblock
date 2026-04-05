@@ -4,7 +4,7 @@ use player_state::PlayerState;
 use player_registry::PlayerRegistry;
 use shared::{parse_json_str, parse_json_u64, GameError};
 
-declare_id!("5kurbimAJh3B9VB4wNC99JZan6pdo6nDGfZD6tbmw4mi");
+declare_id!("3PYqQuPT96x5GA4EXcDkqKC7DKXLbdkYyJrxNGVWE6fU");
 
 #[system]
 pub mod spawn_player {

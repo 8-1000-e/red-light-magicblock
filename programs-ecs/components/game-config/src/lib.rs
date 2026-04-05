@@ -1,6 +1,6 @@
 use bolt_lang::*;
 
-declare_id!("HSmw8VMWEBaNTuTbfG5GZAPabRawKr7DWtDAtov6ev3w");
+declare_id!("4xBQY5TrECe2EUgepnauMdtkSjChxkbw9NvCmwAnMZe6");
 
 #[component(delegate)]
 pub struct GameConfig {

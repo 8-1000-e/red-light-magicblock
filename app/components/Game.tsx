@@ -295,7 +295,7 @@ export default function Game({
         setOnChainY(ps.y);
         setPlayerAlive(ps.alive);
         setPlayerFinished(ps.finished);
-        if (!ps.alive || ps.finished) setGameStatus("ended");
+        if (ps.finished) setGameStatus("ended");
       });
       subs.push(s);
     }
@@ -431,6 +431,19 @@ export default function Game({
     return () => clearInterval(id);
   }, [gameStatus, keysDown, playerAlive, playerFinished, session, worldPda, gameEntityPda, playerEntityPda, erConnection]);
 
+  // ─── Auto-call movePlayer when dead to trigger respawn on-chain ───
+  useEffect(() => {
+    if (gameStatus !== "playing" || playerAlive || playerFinished) return;
+    if (!session || !worldPda || !gameEntityPda || !playerEntityPda || !erConnection) return;
+
+    const id = setInterval(() => {
+      sendMovePlayer(erConnection, session, worldPda, playerEntityPda, gameEntityPda)
+        .then(() => console.log("respawn tick sent"))
+        .catch(() => {});
+    }, 2000);
+    return () => clearInterval(id);
+  }, [gameStatus, playerAlive, playerFinished, session, worldPda, gameEntityPda, playerEntityPda, erConnection]);
+
   const elapsed = gameStatus !== "lobby" ? ((Date.now() - gameStartRef.current) / 1000).toFixed(1) : "0";
 
   // Resolve leaderboard pubkeys to player names
@@ -447,7 +460,7 @@ export default function Game({
 
         <div className="flex items-baseline gap-1">
           <span className="text-blue-700 text-xs md:text-lg">last:</span>
-          <span className="text-gray-800 text-sm md:text-xl">{lastPrice ? lastPrice.toFixed(2) : "..."}</span>
+          <span className="text-gray-800 text-sm md:text-xl">{lastPrice ? lastPrice.toFixed(4) : "..."}</span>
         </div>
 
         <div className={`text-lg md:text-2xl ${light === "red" ? "text-red-600" : "text-green-600"}`}>
@@ -456,7 +469,7 @@ export default function Game({
 
         <div className="flex items-baseline gap-1">
           <span className="text-rose-600 text-xs md:text-lg">now:</span>
-          <span className="text-gray-800 text-sm md:text-xl">{price?.toFixed(2) ?? "..."}</span>
+          <span className="text-gray-800 text-sm md:text-xl">{price?.toFixed(4) ?? "..."}</span>
         </div>
 
         {gameStatus === "playing" && !isSpectate && (
@@ -705,14 +718,23 @@ export default function Game({
           </div>
         )}
 
-        {/* Game over overlay */}
+        {/* Death overlay — respawning */}
+        {gameStatus === "playing" && !playerAlive && !playerFinished && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center pointer-events-none">
+            <div className="absolute inset-0 bg-black/40" />
+            <div className="relative z-10 flex flex-col items-center gap-2">
+              <div className="text-4xl md:text-5xl font-bold text-red-500 drop-shadow-lg">YOU DIED</div>
+              <div className="text-lg md:text-xl text-white/80 font-bold">Respawning in 5s...</div>
+            </div>
+          </div>
+        )}
+
+        {/* Game over overlay — finished */}
         {gameStatus === "ended" && (
           <div className="absolute inset-0 z-50 flex flex-col items-center justify-center pointer-events-none">
             <div className="absolute inset-0 bg-black/50" />
             <div className="relative z-10 flex flex-col items-center gap-3 pointer-events-auto">
-              <div className={`text-5xl font-bold drop-shadow-lg ${playerFinished ? "text-green-400" : "text-red-500"}`}>
-                {playerFinished ? "YOU WIN!" : "ELIMINATED"}
-              </div>
+              <div className="text-5xl font-bold drop-shadow-lg text-green-400">YOU WIN!</div>
               <div className="text-white/70 text-sm drop-shadow">{elapsed}s</div>
             </div>
           </div>

@@ -1,6 +1,6 @@
 use bolt_lang::*;
 
-declare_id!("93hpaDv5S1iQEGLZ86DzrR6t9wsrkpEu8vMoPshzdpU8");
+declare_id!("EVBJ4dfhix7Cfd6ycx7cTK6NJc3k6pjF5Nz3obKcXC3T");
 
 pub const MAX_LEADERBOARD: usize = 10;
 
