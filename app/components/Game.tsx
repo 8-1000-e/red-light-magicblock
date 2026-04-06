@@ -161,6 +161,14 @@ export default function Game({
   const FINISH_LINE_Y = fieldH * (2 / 9);  // 2/9 = finish (top area)
   const START_LINE_Y = fieldH - 30;        // bottom of screen = start
 
+  // ─── Sound effects ───
+  const redSoundRef = useRef<HTMLAudioElement | null>(null);
+  const greenSoundRef = useRef<HTMLAudioElement | null>(null);
+  useEffect(() => {
+    redSoundRef.current = new Audio("/RED LIGHT.mp3");
+    greenSoundRef.current = new Audio("/GREEN LIGHT.mp3");
+  }, []);
+
   // ─── State ───
   const [gameStatus, setGameStatus] = useState<"lobby" | "playing" | "ended">("lobby");
   const [light, setLight] = useState<"green" | "red">("green");
@@ -329,6 +337,16 @@ export default function Game({
       otherSubsRef.current = [];
     };
   }, [erConnection, resolvedGameConfigPda, playerEntityPda, resolvedRegistryPda, resolvedLeaderboardPda]);
+
+  // ─── Sound effects on light change ───
+  useEffect(() => {
+    if (gameStatus !== "playing") return;
+    if (light === "red") {
+      redSoundRef.current?.play().catch(() => {});
+    } else {
+      greenSoundRef.current?.play().catch(() => {});
+    }
+  }, [light, gameStatus]);
 
   // ─── Lobby countdown ───
   useEffect(() => {
