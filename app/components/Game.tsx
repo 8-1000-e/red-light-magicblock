@@ -745,6 +745,14 @@ export default function Game({
                 {playerFinished ? "YOU WIN!" : "GAME OVER"}
               </div>
               <div className="text-white/70 text-sm drop-shadow">{elapsed}s</div>
+              {onBack && (
+                <button
+                  onClick={onBack}
+                  className="mt-4 px-6 py-3 bg-gray-700 hover:bg-gray-600 border-2 border-gray-500 text-white text-lg transition"
+                >
+                  BACK TO LOBBY
+                </button>
+              )}
             </div>
           </div>
         )}
