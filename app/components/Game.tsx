@@ -232,11 +232,13 @@ export default function Game({
       if (lb) setLeaderboard(lb.entries);
     };
 
-    let lastRegistryKey = "";
+    // Pre-compute my PlayerState PDA once (not inside the loop)
+    const myStatePdaStr = playerEntityPda
+      ? FindComponentPda({ componentId: PLAYER_STATE_COMPONENT, entity: playerEntityPda }).toBase58()
+      : null;
+
     const processRegistry = async (playerStatePdas: PublicKey[]) => {
-      const key = playerStatePdas.map(p => p.toBase58()).join(",");
-      if (key === lastRegistryKey || cancelled) return;
-      lastRegistryKey = key;
+      if (cancelled) return;
 
       const players: LobbyPlayer[] = [];
       const others: OtherPlayer[] = [];
@@ -248,9 +250,9 @@ export default function Game({
           const ps = parsePlayerState(info.data as Buffer);
           if (!ps) continue;
           const statePda = playerStatePdas[i];
-          players.push({ name: ps.name || "???", skin: ps.skin || 1, pubkey: ps.authority.toBase58() });
-          const myStatePda = playerEntityPda ? FindComponentPda({ componentId: PLAYER_STATE_COMPONENT, entity: playerEntityPda }).toBase58() : null;
-          if (!myStatePda || statePda.toBase58() !== myStatePda) {
+          // Use statePda as unique ID (authority can be duplicate/unset)
+          players.push({ name: ps.name || "???", skin: ps.skin || 1, pubkey: statePda.toBase58() });
+          if (!myStatePdaStr || statePda.toBase58() !== myStatePdaStr) {
             others.push({
               name: ps.name || "???", skin: ps.skin || 1,
               y: ps.y, prevY: ps.y, alive: ps.alive, finished: ps.finished,
@@ -269,9 +271,8 @@ export default function Game({
       otherSubsRef.current = [];
 
       // Sub to each other player
-      const myStatePda = playerEntityPda ? FindComponentPda({ componentId: PLAYER_STATE_COMPONENT, entity: playerEntityPda }).toBase58() : null;
       for (const statePda of playerStatePdas) {
-        if (myStatePda && statePda.toBase58() === myStatePda) continue;
+        if (myStatePdaStr && statePda.toBase58() === myStatePdaStr) continue;
         const subId = erConnection.onAccountChange(statePda, (info) => {
           const ps = parsePlayerState(info.data as Buffer);
           if (!ps) return;
