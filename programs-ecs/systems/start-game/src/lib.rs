@@ -2,7 +2,7 @@ use bolt_lang::*;
 use game_config::GameConfig;
 use shared::{GameError, read_pyth_price};
 
-declare_id!("AUmgrJaCwgJ9QBB3oJGdraA9MswXzjuAgrLTuxA3dYSh");
+declare_id!("51AxDtg6NSUJZw1yeocFNs5qcHrxyJDNcYGT26Xi32r7");
 
 #[system]
 pub mod start_game {
@@ -14,7 +14,7 @@ pub mod start_game {
     pub fn execute(ctx: Context<Components>, _args: Vec<u8>) -> Result<Components> 
     {
         require!(ctx.accounts.game_config.status == 0, GameError::GameNotWaiting);
-        require!(Clock::get()?.unix_timestamp >= ctx.accounts.game_config.lobby_end, GameError::LobbyNotOver);
+        // require!(Clock::get()?.unix_timestamp >= ctx.accounts.game_config.lobby_end, GameError::LobbyNotOver);
 
         ctx.accounts.game_config.status = 1; // Playing
         ctx.accounts.game_config.light = 0; // Green

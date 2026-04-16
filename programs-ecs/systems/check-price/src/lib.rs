@@ -2,7 +2,7 @@ use bolt_lang::*;
 use game_config::GameConfig;
 use shared::{GameError, read_pyth_price};
 
-declare_id!("C79XfcHutZS87nW1WB52pjtEhdioNMTxxc1Uz5QDTg9E");
+declare_id!("6KChRcRC1UtgnWcpxEStZyryAXqpRpzsaPBqHw9BqVyv");
 
 const CHECK_COOLDOWN: i64 = 3; // check every 3 seconds
 const RED_DURATION: i64 = 2;   // red light lasts 2 seconds

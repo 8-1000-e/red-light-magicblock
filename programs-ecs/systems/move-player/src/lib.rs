@@ -4,7 +4,7 @@ use player_state::PlayerState;
 use leaderboard::Leaderboard;
 use shared::GameError;
 
-declare_id!("k2G5xobAryNuPg2FkQd6pK5DQcfErUGskWS54qbC833");
+declare_id!("B3jhhTuDaZ5WebzsWQs6GDsm2p63nH5AxNcxhDkj7hFu");
 
 const FINISH_Y: u16 = 200;
 const MIN_SLOT_GAP: u64 = 1; // 1 slot minimum between moves (~50ms on ER)
@@ -12,7 +12,8 @@ const RESPAWN_DELAY: i64 = 5; // 5 seconds to respawn
 
 #[system]
 pub mod move_player {
-    pub fn execute(ctx: Context<Components>, _args: Vec<u8>) -> Result<Components> {
+    pub fn execute(ctx: Context<Components>, _args: Vec<u8>) -> Result<Components> 
+    {
         require!(ctx.accounts.game_config.status == 1, GameError::GameNotPlaying);
         require!(!ctx.accounts.player_state.finished, GameError::PlayerFinished);
 
@@ -55,7 +56,7 @@ pub mod move_player {
                 // Push to leaderboard
                 let pos = ctx.accounts.leaderboard.count as usize;
                 if pos < 10 {
-                    let addr = ctx.accounts.player_state.authority.to_bytes();
+                    let addr = ctx.accounts.player_state.owner.to_bytes();
                     ctx.accounts.leaderboard.entries[pos] = addr;
                     ctx.accounts.leaderboard.count += 1;
                 }

@@ -1,10 +1,11 @@
 use bolt_lang::*;
 
-declare_id!("BCHiAy9P55oJjVrLYQ3nyEBzxTDrBVvdDw2JHz3nAAKh");
+declare_id!("GyvRi4vsBV7EnVmPTVnvekznbTHW3YfUhsUi8mir8FzF");
 
 #[component(delegate)]
 pub struct PlayerState {
     pub authority: Pubkey,
+    pub owner: Pubkey,
     pub alive: bool,
     pub finished: bool,
     pub finish_time: i64,
@@ -25,6 +26,7 @@ impl Default for PlayerState {
     fn default() -> Self {
         Self {
             authority: Pubkey::default(),
+            owner: Pubkey::default(),
             alive: false,
             finished: false,
             finish_time: 0,

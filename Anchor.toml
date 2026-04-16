@@ -13,6 +13,7 @@ player-registry = "G3RuJgA65dgqXJdPDsiZVUbiFC6LX8Grz8wBNiRxoe5H"
 player-state = "3pXqzoU9T4uQzVTv1gZJrPNe59qFKy2GP4353JK22Swu"
 spawn-player = "5kurbimAJh3B9VB4wNC99JZan6pdo6nDGfZD6tbmw4mi"
 start-game = "2zKVpP5ovwYVfcTtEj1n4sRWdBoRcDKVk8AbzEAo8B8k"
+red-light-lobby = "9wP7YLwy4wBUb6fNVbTMqjAXKHSfModT1R1VnkMzVAFH"
 
 [programs.devnet]
 check-price = "14aiGdhHAwHjMCJb8F4agsa4NNWdyZCBQjvBcX3Fib6K"
@@ -23,6 +24,7 @@ player-registry = "G3RuJgA65dgqXJdPDsiZVUbiFC6LX8Grz8wBNiRxoe5H"
 player-state = "3pXqzoU9T4uQzVTv1gZJrPNe59qFKy2GP4353JK22Swu"
 spawn-player = "5kurbimAJh3B9VB4wNC99JZan6pdo6nDGfZD6tbmw4mi"
 start-game = "2zKVpP5ovwYVfcTtEj1n4sRWdBoRcDKVk8AbzEAo8B8k"
+red-light-lobby = "9wP7YLwy4wBUb6fNVbTMqjAXKHSfModT1R1VnkMzVAFH"
 
 [registry]
 url = "https://api.apr.dev"
@@ -32,7 +34,7 @@ cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [workspace]
-members = ["programs-ecs/components/*", "programs-ecs/systems/*"]
+members = ["programs-ecs/components/*", "programs-ecs/systems/*", "programs/*"]
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

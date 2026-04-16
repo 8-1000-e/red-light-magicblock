@@ -111,4 +111,6 @@ pub enum GameError {
     LobbyNotOver,
     #[msg("Invalid movement")]
     InvalidMove,
+    #[msg("Unauthorized — signer is not the player owner")]
+    Unauthorized,
 }

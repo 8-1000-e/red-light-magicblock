@@ -1,6 +1,6 @@
 use bolt_lang::*;
 use game_config::GameConfig;
-declare_id!("7ASuMaj8sZRjvaEB8qE9o5tuFoyQ5UUCR3H354itdsQA");
+declare_id!("38wPngniB8Hn4eHqbr2rJBXVLtNGgYYDcLBtqHfPm6Wn");
 
 const LOBBY_DURATION: i64 = 120; // 40 seconds lobby
 

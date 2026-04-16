@@ -1,0 +1,96 @@
+################################################################
+# Manage red-light deployment through Crypto Infrastructure as Code
+################################################################
+
+addon "svm" {
+    rpc_api_url = input.rpc_api_url
+    network_id = input.network_id
+}
+
+action "deploy_check_price" "svm::deploy_program" {
+    description = "Deploy check_price program"
+    program = svm::get_program_from_anchor_project("check_price") 
+    authority = signer.authority
+    payer = signer.payer
+    // Optional: if you want to deploy the program via a cheatcode when targeting a Surfnet, set `instant_surfnet_deployment = true`
+    // Deploying via a cheatcode will write the program data directly to the program account, rather than sending transactions.
+    // This will make deployments instantaneous, but is deviating from how the deployments will take place on devnet/mainnet.
+    // instant_surfnet_deployment = true
+}
+
+action "deploy_game_config" "svm::deploy_program" {
+    description = "Deploy game_config program"
+    program = svm::get_program_from_anchor_project("game_config") 
+    authority = signer.authority
+    payer = signer.payer
+    // Optional: if you want to deploy the program via a cheatcode when targeting a Surfnet, set `instant_surfnet_deployment = true`
+    // Deploying via a cheatcode will write the program data directly to the program account, rather than sending transactions.
+    // This will make deployments instantaneous, but is deviating from how the deployments will take place on devnet/mainnet.
+    // instant_surfnet_deployment = true
+}
+
+action "deploy_init_game" "svm::deploy_program" {
+    description = "Deploy init_game program"
+    program = svm::get_program_from_anchor_project("init_game") 
+    authority = signer.authority
+    payer = signer.payer
+    // Optional: if you want to deploy the program via a cheatcode when targeting a Surfnet, set `instant_surfnet_deployment = true`
+    // Deploying via a cheatcode will write the program data directly to the program account, rather than sending transactions.
+    // This will make deployments instantaneous, but is deviating from how the deployments will take place on devnet/mainnet.
+    // instant_surfnet_deployment = true
+}
+
+action "deploy_move_player" "svm::deploy_program" {
+    description = "Deploy move_player program"
+    program = svm::get_program_from_anchor_project("move_player") 
+    authority = signer.authority
+    payer = signer.payer
+    // Optional: if you want to deploy the program via a cheatcode when targeting a Surfnet, set `instant_surfnet_deployment = true`
+    // Deploying via a cheatcode will write the program data directly to the program account, rather than sending transactions.
+    // This will make deployments instantaneous, but is deviating from how the deployments will take place on devnet/mainnet.
+    // instant_surfnet_deployment = true
+}
+
+action "deploy_player_registry" "svm::deploy_program" {
+    description = "Deploy player_registry program"
+    program = svm::get_program_from_anchor_project("player_registry") 
+    authority = signer.authority
+    payer = signer.payer
+    // Optional: if you want to deploy the program via a cheatcode when targeting a Surfnet, set `instant_surfnet_deployment = true`
+    // Deploying via a cheatcode will write the program data directly to the program account, rather than sending transactions.
+    // This will make deployments instantaneous, but is deviating from how the deployments will take place on devnet/mainnet.
+    // instant_surfnet_deployment = true
+}
+
+action "deploy_player_state" "svm::deploy_program" {
+    description = "Deploy player_state program"
+    program = svm::get_program_from_anchor_project("player_state") 
+    authority = signer.authority
+    payer = signer.payer
+    // Optional: if you want to deploy the program via a cheatcode when targeting a Surfnet, set `instant_surfnet_deployment = true`
+    // Deploying via a cheatcode will write the program data directly to the program account, rather than sending transactions.
+    // This will make deployments instantaneous, but is deviating from how the deployments will take place on devnet/mainnet.
+    // instant_surfnet_deployment = true
+}
+
+action "deploy_spawn_player" "svm::deploy_program" {
+    description = "Deploy spawn_player program"
+    program = svm::get_program_from_anchor_project("spawn_player") 
+    authority = signer.authority
+    payer = signer.payer
+    // Optional: if you want to deploy the program via a cheatcode when targeting a Surfnet, set `instant_surfnet_deployment = true`
+    // Deploying via a cheatcode will write the program data directly to the program account, rather than sending transactions.
+    // This will make deployments instantaneous, but is deviating from how the deployments will take place on devnet/mainnet.
+    // instant_surfnet_deployment = true
+}
+
+action "deploy_start_game" "svm::deploy_program" {
+    description = "Deploy start_game program"
+    program = svm::get_program_from_anchor_project("start_game") 
+    authority = signer.authority
+    payer = signer.payer
+    // Optional: if you want to deploy the program via a cheatcode when targeting a Surfnet, set `instant_surfnet_deployment = true`
+    // Deploying via a cheatcode will write the program data directly to the program account, rather than sending transactions.
+    // This will make deployments instantaneous, but is deviating from how the deployments will take place on devnet/mainnet.
+    // instant_surfnet_deployment = true
+}
