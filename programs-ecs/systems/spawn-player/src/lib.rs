@@ -23,7 +23,7 @@ pub mod spawn_player {
         // authority = session_signer (whoever signed the tx) — BOLT convention
         ctx.accounts.player_state.authority = *ctx.accounts.authority.key;
 
-        // owner = phantom pubkey of the player, passed as last remaining_account
+        // owner = pubkey of the player, passed as last remaining_account
         let owner_idx = ctx.remaining_accounts.len() - 1;
         ctx.accounts.player_state.owner = *ctx.remaining_accounts[owner_idx].key;
 

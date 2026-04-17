@@ -2,12 +2,13 @@ use anchor_lang::prelude::*;
 use crate::constants::*;
 use crate::errors::*;
 use crate::state::*;
+use crate::PrizeDistributed;
 
 /// Split table (shares of total_pot, in basis points):
 ///   count = 0    → treasury gets 100%
-///   count = 1|2  → winner1 95%, treasury 5%
-///   count = 3    → winner1 70%, winner2 25%, treasury 5%
-///   count ≥ 4    → winner1 55%, winner2 25%, winner3 15%, treasury 5%
+///   count = 1    → winner1 95%, treasury 5% (solo finisher edge case)
+///   count = 2    → winner1 70%, winner2 25%, treasury 5%
+///   count ≥ 3    → winner1 55%, winner2 25%, winner3 15%, treasury 5%
 ///
 /// Anti-scam: the handler decodes the on-chain `leaderboard` account manually
 /// and verifies that remaining_accounts[i] matches leaderboard.entries[i] for
@@ -60,8 +61,8 @@ pub fn distribute_prize(ctx: Context<DistributePrize>, _lobby_id: u64) -> Result
     let total_pot = ctx.accounts.vault.total_pot;
     let (w1_bps, w2_bps, w3_bps): (u64, u64, u64) = match count {
         0 => (0, 0, 0),
-        1 | 2 => (9500, 0, 0),
-        3 => (7000, 2500, 0),
+        1 => (9500, 0, 0),
+        2 => (7000, 2500, 0),
         _ => (5500, 2500, 1500),
     };
     let w1_cut = total_pot * w1_bps / 10000;
@@ -100,6 +101,22 @@ pub fn distribute_prize(ctx: Context<DistributePrize>, _lobby_id: u64) -> Result
 
     let lobby_mut = &mut ctx.accounts.lobby;
     lobby_mut.status = STATUS_SETTLED;
+
+    // 7. Emit event for front/indexer consumption
+    let mut winner_pubkeys = Vec::new();
+    let mut winner_amounts = Vec::new();
+    if w1_cut > 0 { winner_pubkeys.push(rem[0].key()); winner_amounts.push(w1_cut); }
+    if w2_cut > 0 { winner_pubkeys.push(rem[1].key()); winner_amounts.push(w2_cut); }
+    if w3_cut > 0 { winner_pubkeys.push(rem[2].key()); winner_amounts.push(w3_cut); }
+
+    emit!(PrizeDistributed {
+        lobby_id: lobby_mut.lobby_id,
+        total_pot,
+        treasury_cut,
+        winner_count: count,
+        winner_pubkeys,
+        winner_amounts,
+    });
 
     Ok(())
 }

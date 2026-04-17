@@ -9,6 +9,16 @@ pub use instructions::*;
 
 declare_id!("9wP7YLwy4wBUb6fNVbTMqjAXKHSfModT1R1VnkMzVAFH");
 
+#[event]
+pub struct PrizeDistributed {
+    pub lobby_id: u64,
+    pub total_pot: u64,
+    pub treasury_cut: u64,
+    pub winner_count: u8,
+    pub winner_pubkeys: Vec<Pubkey>,
+    pub winner_amounts: Vec<u64>,
+}
+
 #[program]
 pub mod red_light_lobby {
     use super::*;
@@ -37,6 +47,12 @@ pub mod red_light_lobby {
     ///   [0..count]  winner wallets in leaderboard order
     pub fn distribute_prize(ctx: Context<DistributePrize>, lobby_id: u64) -> Result<()> {
         instructions::distribute_prize::distribute_prize(ctx, lobby_id)
+    }
+
+    /// Refund all players from the vault when a match launch fails.
+    /// remaining_accounts: player wallets in lobby.players[] order.
+    pub fn refund_lobby(ctx: Context<RefundLobby>, lobby_id: u64) -> Result<()> {
+        instructions::refund_lobby::refund_lobby(ctx, lobby_id)
     }
 
     /// Back closes a settled lobby and reclaims the rent from Lobby + Vault.
