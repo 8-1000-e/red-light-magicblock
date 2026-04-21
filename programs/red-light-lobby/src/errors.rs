@@ -28,4 +28,6 @@ pub enum LobbyError {
     InvalidTreasury,
     #[msg("Vault balance insufficient for computed payout (should not happen)")]
     VaultUnderflow,
+    #[msg("Player is not in this lobby")]
+    NotInLobby,
 }

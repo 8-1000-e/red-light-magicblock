@@ -6,7 +6,7 @@ use shared::GameError;
 
 declare_id!("B3jhhTuDaZ5WebzsWQs6GDsm2p63nH5AxNcxhDkj7hFu");
 
-const FINISH_Y: u16 = 200;
+const FINISH_Y: u16 = 300;
 const MIN_SLOT_GAP: u64 = 1; // 1 slot minimum between moves (~50ms on ER)
 const RESPAWN_DELAY: i64 = 5; // 5 seconds to respawn
 

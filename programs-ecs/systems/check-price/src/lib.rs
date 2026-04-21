@@ -5,7 +5,7 @@ use shared::{GameError, read_pyth_price};
 declare_id!("6KChRcRC1UtgnWcpxEStZyryAXqpRpzsaPBqHw9BqVyv");
 
 const CHECK_COOLDOWN: i64 = 3; // check every 3 seconds
-const RED_DURATION: i64 = 2;   // red light lasts 2 seconds
+const RED_DURATION: i64 = 3;   // red light lasts 2 seconds
 
 #[system]
 pub mod check_price {

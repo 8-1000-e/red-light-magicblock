@@ -49,6 +49,11 @@ pub mod red_light_lobby {
         instructions::distribute_prize::distribute_prize(ctx, lobby_id)
     }
 
+    /// Player leaves an open lobby — refund entry fee. Called by backend (JWT-verified).
+    pub fn leave_lobby(ctx: Context<LeaveLobby>, lobby_id: u64, player: Pubkey) -> Result<()> {
+        instructions::leave_lobby::leave_lobby(ctx, lobby_id, player)
+    }
+
     /// Refund all players from the vault when a match launch fails.
     /// remaining_accounts: player wallets in lobby.players[] order.
     pub fn refund_lobby(ctx: Context<RefundLobby>, lobby_id: u64) -> Result<()> {
