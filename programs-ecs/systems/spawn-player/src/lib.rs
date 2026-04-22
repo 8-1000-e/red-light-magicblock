@@ -2,13 +2,14 @@ use bolt_lang::*;
 use game_config::GameConfig;
 use player_state::PlayerState;
 use player_registry::PlayerRegistry;
+use leaderboard::{Leaderboard, LeaderboardEntry, MAX_LEADERBOARD};
 use shared::{parse_json_str, parse_json_u64, GameError};
 
 declare_id!("CSkzXYoeQJXNRtEoPYaf5vUX7vhFooBeRjpJc1DkHrPT");
 
 #[system]
 pub mod spawn_player {
-    pub fn execute(ctx: Context<Components>, _args: Vec<u8>) -> Result<Components> 
+    pub fn execute(ctx: Context<Components>, _args: Vec<u8>) -> Result<Components>
     {
         require!(ctx.accounts.game_config.status == 0, GameError::GameNotWaiting);
         let active = ctx.accounts.game_config.active_players as usize;
@@ -27,7 +28,7 @@ pub mod spawn_player {
         let owner_idx = ctx.remaining_accounts.len() - 1;
         ctx.accounts.player_state.owner = *ctx.remaining_accounts[owner_idx].key;
 
-        // Init player — y=0 (bottom), goes up to 200 (finish)
+        // Init player — y=0 (bottom), goes up to 300 (finish)
         ctx.accounts.player_state.alive = true;
         ctx.accounts.player_state.finished = false;
         ctx.accounts.player_state.finish_time = 0;
@@ -42,6 +43,24 @@ pub mod spawn_player {
         ctx.accounts.player_registry.count += 1;
         ctx.accounts.game_config.active_players += 1;
 
+        // Initialize leaderboard entry so player appears from start (y=0, unfinished)
+        let lb_count = ctx.accounts.leaderboard.count as usize;
+        if lb_count < MAX_LEADERBOARD {
+            let mut name_arr = [0u8; 16];
+            name_arr[..len].copy_from_slice(&name_bytes[..len]);
+            let owner_bytes = ctx.accounts.player_state.owner.to_bytes();
+            ctx.accounts.leaderboard.entries[lb_count] = LeaderboardEntry {
+                pubkey: owner_bytes,
+                y: 0,
+                finished: false,
+                finish_time: 0,
+                name: name_arr,
+                name_len: len as u8,
+                skin: ctx.accounts.player_state.skin,
+            };
+            ctx.accounts.leaderboard.count += 1;
+        }
+
         Ok(ctx.accounts)
     }
 
@@ -50,5 +69,6 @@ pub mod spawn_player {
         pub player_state: PlayerState,
         pub game_config: GameConfig,
         pub player_registry: PlayerRegistry,
+        pub leaderboard: Leaderboard,
     }
 }

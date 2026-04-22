@@ -45,8 +45,8 @@ pub mod red_light_lobby {
     ///
     /// remaining_accounts layout:
     ///   [0..count]  winner wallets in leaderboard order
-    pub fn distribute_prize(ctx: Context<DistributePrize>, lobby_id: u64) -> Result<()> {
-        instructions::distribute_prize::distribute_prize(ctx, lobby_id)
+    pub fn distribute_prize(ctx: Context<DistributePrize>, lobby_id: u64, player_count: u8) -> Result<()> {
+        instructions::distribute_prize::distribute_prize(ctx, lobby_id, player_count)
     }
 
     /// Player leaves an open lobby — refund entry fee. Called by backend (JWT-verified).

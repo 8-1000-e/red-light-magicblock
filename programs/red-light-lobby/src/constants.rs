@@ -24,10 +24,14 @@ pub const STATUS_SETTLED: u8 = 2;
 pub const LEADERBOARD_COMPONENT_ID: Pubkey =
     pubkey!("6t7mqQmYpTDRvovNfAZW66y9vQdU7UKcSo3TCP9fPRNk");
 
-// Layout of the BOLT Leaderboard account we decode manually:
-//   [0..8]     anchor discriminator
-//   [8..328]   entries: [[u8; 32]; 10]  (320 bytes)
-//   [328]      count: u8
+// Layout of the BOLT Leaderboard account we decode manually.
+// Entry: pubkey(32) + y(u16=2) + finished(1) + finish_time(i64=8) + name(16) + name_len(1) + skin(1) = 61 bytes
+//   [0..8]              anchor discriminator
+//   [8..618]            entries: [Entry; 10]  (610 bytes)
+//   [618]               count: u8
 pub const LEADERBOARD_DISC_LEN: usize = 8;
-pub const LEADERBOARD_ENTRIES_LEN: usize = 32 * 10;
+pub const LEADERBOARD_ENTRY_SIZE: usize = 61;
+pub const LEADERBOARD_ENTRY_Y_OFFSET: usize = 32;         // within an entry: y starts at byte 32
+pub const LEADERBOARD_ENTRY_FINISHED_OFFSET: usize = 34;  // finished bool at byte 34
+pub const LEADERBOARD_ENTRIES_LEN: usize = LEADERBOARD_ENTRY_SIZE * 10;
 pub const LEADERBOARD_COUNT_OFFSET: usize = LEADERBOARD_DISC_LEN + LEADERBOARD_ENTRIES_LEN;

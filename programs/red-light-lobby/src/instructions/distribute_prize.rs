@@ -4,16 +4,18 @@ use crate::errors::*;
 use crate::state::*;
 use crate::PrizeDistributed;
 
-/// Split table (shares of total_pot, in basis points):
-///   count = 0    → treasury gets 100%
-///   count = 1    → winner1 95%, treasury 5% (solo finisher edge case)
-///   count = 2    → winner1 70%, winner2 25%, treasury 5%
-///   count ≥ 3    → winner1 55%, winner2 25%, winner3 15%, treasury 5%
+/// Distribution:
+///   - Top half = floor(player_count / 2) slots, equal shares of 95% of pot
+///   - Ties at the cutoff among unfinished players with same y split the last slot
+///   - Treasury always gets 5% (100% if no winners)
 ///
-/// Anti-scam: the handler decodes the on-chain `leaderboard` account manually
-/// and verifies that remaining_accounts[i] matches leaderboard.entries[i] for
-/// every paid position. The back cannot substitute its own wallets.
-pub fn distribute_prize(ctx: Context<DistributePrize>, _lobby_id: u64) -> Result<()> {
+/// Anti-scam: the handler decodes the on-chain `leaderboard` account and verifies
+/// that remaining_accounts[i] matches leaderboard.entries[i].pubkey for every
+/// paid position. The back cannot substitute its own wallets.
+///
+/// `player_count` is the total number of players at match start (= active_players
+/// from GameConfig, never decremented). Passed by the back as an arg.
+pub fn distribute_prize(ctx: Context<DistributePrize>, _lobby_id: u64, player_count: u8) -> Result<()> {
     let lobby = &ctx.accounts.lobby;
 
     require!(lobby.status == STATUS_STARTED, LobbyError::LobbyNotStarted);
@@ -45,11 +47,59 @@ pub fn distribute_prize(ctx: Context<DistributePrize>, _lobby_id: u64) -> Result
     let entries_slice =
         &lb_data[LEADERBOARD_DISC_LEN..LEADERBOARD_DISC_LEN + LEADERBOARD_ENTRIES_LEN];
 
-    // 3. Verify each remaining_account matches the corresponding leaderboard entry
+    // 3. Compute cutoff = floor(player_count / 2). Leaderboard is always populated
+    //    on spawn, so count >= player_count. With MIN_PLAYERS=2, cutoff >= 1.
+    let cutoff = player_count as usize / 2;
+    require!(cutoff > 0 && cutoff <= count as usize, LobbyError::EmptyLeaderboard);
+
+    let total_pot = ctx.accounts.vault.total_pot;
+    let treasury_cut = total_pot * PLATFORM_FEE_BPS / 10000;
+    let winner_pool = total_pot - treasury_cut;
+    let prize_per_slot = winner_pool / cutoff as u64;
+
+    // 4. Detect tie at cutoff: last winning index is cutoff-1. If that entry is
+    //    unfinished and any entries at indices >= cutoff are unfinished with the
+    //    same y, include them as tied winners sharing the last slot.
+    let last_idx = cutoff - 1;
+    let last_entry_offset = last_idx * LEADERBOARD_ENTRY_SIZE;
+    let last_entry_finished =
+        entries_slice[last_entry_offset + LEADERBOARD_ENTRY_FINISHED_OFFSET] == 1;
+    let last_entry_y = u16::from_le_bytes([
+        entries_slice[last_entry_offset + LEADERBOARD_ENTRY_Y_OFFSET],
+        entries_slice[last_entry_offset + LEADERBOARD_ENTRY_Y_OFFSET + 1],
+    ]);
+
+    let mut tied_count: usize = 1; // includes last_idx itself
+    if !last_entry_finished {
+        let mut i = cutoff; // index after last_idx
+        while i < count as usize {
+            let off = i * LEADERBOARD_ENTRY_SIZE;
+            let e_finished = entries_slice[off + LEADERBOARD_ENTRY_FINISHED_OFFSET] == 1;
+            if e_finished {
+                break;
+            }
+            let e_y = u16::from_le_bytes([
+                entries_slice[off + LEADERBOARD_ENTRY_Y_OFFSET],
+                entries_slice[off + LEADERBOARD_ENTRY_Y_OFFSET + 1],
+            ]);
+            if e_y == last_entry_y {
+                tied_count += 1;
+                i += 1;
+            } else {
+                break;
+            }
+        }
+    }
+
+    // Total number of addresses that receive a prize
+    let total_winners = cutoff - 1 + tied_count; // (cutoff-1) normal + tied_count tied
+
+    // 5. Verify remaining_accounts match leaderboard.entries[i].pubkey for 0..total_winners
     let rem = ctx.remaining_accounts;
-    require!((rem.len() as u8) >= count, LobbyError::NotEnoughAccounts);
-    for i in 0..count as usize {
-        let expected_bytes: [u8; 32] = entries_slice[i * 32..(i + 1) * 32]
+    require!(rem.len() >= total_winners, LobbyError::NotEnoughAccounts);
+    for i in 0..total_winners {
+        let off = i * LEADERBOARD_ENTRY_SIZE;
+        let expected_bytes: [u8; 32] = entries_slice[off..off + 32]
             .try_into()
             .expect("slice of length 32 must convert");
         let expected_pk = Pubkey::new_from_array(expected_bytes);
@@ -57,63 +107,47 @@ pub fn distribute_prize(ctx: Context<DistributePrize>, _lobby_id: u64) -> Result
     }
     drop(lb_data);
 
-    // 4. Compute cuts (all bps out of 10000, fractions of total_pot)
-    let total_pot = ctx.accounts.vault.total_pot;
-    let (w1_bps, w2_bps, w3_bps): (u64, u64, u64) = match count {
-        0 => (0, 0, 0),
-        1 => (9500, 0, 0),
-        2 => (7000, 2500, 0),
-        _ => (5500, 2500, 1500),
-    };
-    let w1_cut = total_pot * w1_bps / 10000;
-    let w2_cut = total_pot * w2_bps / 10000;
-    let w3_cut = total_pot * w3_bps / 10000;
+    // 6. Compute per-winner cuts
+    // Ranks 1..cutoff-1 (i.e. indices 0..cutoff-2): prize_per_slot each.
+    // Tied group (indices cutoff-1..cutoff-1+tied_count-1): prize_per_slot / tied_count each.
+    let tied_prize = prize_per_slot / tied_count as u64;
 
-    // Treasury takes 5% normally, or the whole pot when there is no winner.
-    let treasury_cut = if count == 0 {
-        total_pot
-    } else {
-        total_pot * PLATFORM_FEE_BPS / 10000
-    };
+    // 7. Perform the transfers
+    let mut winner_pubkeys = Vec::with_capacity(total_winners);
+    let mut winner_amounts = Vec::with_capacity(total_winners);
 
-    // 5. Perform the transfers (vault owned by this program → direct lamport ops)
-    if w1_cut > 0 {
-        ctx.accounts.vault.sub_lamports(w1_cut)?;
-        rem[0].add_lamports(w1_cut)?;
+    for i in 0..(cutoff - 1) {
+        ctx.accounts.vault.sub_lamports(prize_per_slot)?;
+        rem[i].add_lamports(prize_per_slot)?;
+        winner_pubkeys.push(rem[i].key());
+        winner_amounts.push(prize_per_slot);
     }
-    if w2_cut > 0 {
-        ctx.accounts.vault.sub_lamports(w2_cut)?;
-        rem[1].add_lamports(w2_cut)?;
-    }
-    if w3_cut > 0 {
-        ctx.accounts.vault.sub_lamports(w3_cut)?;
-        rem[2].add_lamports(w3_cut)?;
-    }
-    if treasury_cut > 0 {
-        ctx.accounts.vault.sub_lamports(treasury_cut)?;
-        ctx.accounts.treasury.add_lamports(treasury_cut)?;
+    for i in 0..tied_count {
+        let idx = (cutoff - 1) + i;
+        ctx.accounts.vault.sub_lamports(tied_prize)?;
+        rem[idx].add_lamports(tied_prize)?;
+        winner_pubkeys.push(rem[idx].key());
+        winner_amounts.push(tied_prize);
     }
 
-    // 6. Bookkeeping
-    let paid = w1_cut + w2_cut + w3_cut + treasury_cut;
+    // Treasury transfer
+    ctx.accounts.vault.sub_lamports(treasury_cut)?;
+    ctx.accounts.treasury.add_lamports(treasury_cut)?;
+
+    // 8. Bookkeeping
+    let paid: u64 = winner_amounts.iter().sum::<u64>() + treasury_cut;
     let vault_mut = &mut ctx.accounts.vault;
     vault_mut.total_pot = vault_mut.total_pot.saturating_sub(paid);
 
     let lobby_mut = &mut ctx.accounts.lobby;
     lobby_mut.status = STATUS_SETTLED;
 
-    // 7. Emit event for front/indexer consumption
-    let mut winner_pubkeys = Vec::new();
-    let mut winner_amounts = Vec::new();
-    if w1_cut > 0 { winner_pubkeys.push(rem[0].key()); winner_amounts.push(w1_cut); }
-    if w2_cut > 0 { winner_pubkeys.push(rem[1].key()); winner_amounts.push(w2_cut); }
-    if w3_cut > 0 { winner_pubkeys.push(rem[2].key()); winner_amounts.push(w3_cut); }
-
+    // 9. Emit event
     emit!(PrizeDistributed {
         lobby_id: lobby_mut.lobby_id,
         total_pot,
         treasury_cut,
-        winner_count: count,
+        winner_count: total_winners as u8,
         winner_pubkeys,
         winner_amounts,
     });
