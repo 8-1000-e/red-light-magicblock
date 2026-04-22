@@ -3228,7 +3228,6 @@ version = "0.2.4"
 dependencies = [
  "bolt-lang",
  "game-config",
- "leaderboard",
  "player-registry",
  "player-state",
  "serde",

@@ -58,6 +58,20 @@ pub mod move_player {
 
         update_leaderboard(&mut ctx.accounts.leaderboard, &ctx.accounts.player_state, now);
 
+        // End game early if half (or more) of the players have finished
+        if ctx.accounts.player_state.finished {
+            let cutoff = (ctx.accounts.game_config.active_players as usize) / 2;
+            let mut finished_count: usize = 0;
+            for i in 0..(ctx.accounts.leaderboard.count as usize) {
+                if ctx.accounts.leaderboard.entries[i].finished {
+                    finished_count += 1;
+                }
+            }
+            if cutoff > 0 && finished_count >= cutoff {
+                ctx.accounts.game_config.status = 2; // Finished
+            }
+        }
+
         Ok(ctx.accounts)
     }
 

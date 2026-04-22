@@ -47,12 +47,32 @@ pub fn distribute_prize(ctx: Context<DistributePrize>, _lobby_id: u64, player_co
     let entries_slice =
         &lb_data[LEADERBOARD_DISC_LEN..LEADERBOARD_DISC_LEN + LEADERBOARD_ENTRIES_LEN];
 
-    // 3. Compute cutoff = floor(player_count / 2). Leaderboard is always populated
-    //    on spawn, so count >= player_count. With MIN_PLAYERS=2, cutoff >= 1.
-    let cutoff = player_count as usize / 2;
-    require!(cutoff > 0 && cutoff <= count as usize, LobbyError::EmptyLeaderboard);
+    // 3. Compute cutoff. Clamp to on-chain leaderboard count — players who
+    //    never moved are not in the leaderboard.
+    let desired_cutoff = player_count as usize / 2;
+    let cutoff = desired_cutoff.min(count as usize);
 
     let total_pot = ctx.accounts.vault.total_pot;
+
+    // If no winners (nobody moved), treasury takes everything
+    if cutoff == 0 {
+        ctx.accounts.vault.sub_lamports(total_pot)?;
+        ctx.accounts.treasury.add_lamports(total_pot)?;
+        let vault_mut = &mut ctx.accounts.vault;
+        vault_mut.total_pot = 0;
+        let lobby_mut = &mut ctx.accounts.lobby;
+        lobby_mut.status = STATUS_SETTLED;
+        emit!(PrizeDistributed {
+            lobby_id: lobby_mut.lobby_id,
+            total_pot,
+            treasury_cut: total_pot,
+            winner_count: 0,
+            winner_pubkeys: Vec::new(),
+            winner_amounts: Vec::new(),
+        });
+        return Ok(());
+    }
+
     let treasury_cut = total_pot * PLATFORM_FEE_BPS / 10000;
     let winner_pool = total_pot - treasury_cut;
     let prize_per_slot = winner_pool / cutoff as u64;
