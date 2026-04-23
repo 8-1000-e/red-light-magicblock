@@ -73,7 +73,11 @@ pub fn distribute_prize(ctx: Context<DistributePrize>, _lobby_id: u64, player_co
         return Ok(());
     }
 
-    let treasury_cut = total_pot * PLATFORM_FEE_BPS / 10000;
+    // Dynamic fee: 2-player matches (1 winner) pay higher % to cover tx fees.
+    //   player_count <= 2 → 8%
+    //   player_count >= 3 → PLATFORM_FEE_BPS (5%)
+    let fee_bps: u64 = if player_count <= 2 { 800 } else { PLATFORM_FEE_BPS };
+    let treasury_cut = total_pot * fee_bps / 10000;
     let winner_pool = total_pot - treasury_cut;
     let prize_per_slot = winner_pool / cutoff as u64;
 
