@@ -97,9 +97,13 @@ fn update_leaderboard(lb: &mut Leaderboard, ps: &PlayerState, _now: i64) {
         }
     }
 
+    // Dead players drop to y=0 in the leaderboard so they don't hold a top
+    // position while idle. The sprite position (player_state.y) is preserved
+    // so the UI still shows the death spot.
+    let lb_y = if ps.alive || ps.finished { ps.y } else { 0 };
     let entry = LeaderboardEntry {
         pubkey: pubkey_bytes,
-        y: ps.y,
+        y: lb_y,
         finished: ps.finished,
         finish_time: ps.finish_time,
         name: ps.name,
